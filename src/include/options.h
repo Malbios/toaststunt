@@ -32,7 +32,7 @@
  * a line in the log file indicating who changed which verb.
  */
 
-#define LOG_CODE_CHANGES
+/* #define LOG_CODE_CHANGES */
 
 /******************************************************************************
  * When enabled, this option will cause the eval() builtin to write
@@ -122,22 +122,22 @@
  * updated.
  */
 
-#define DEFAULT_MAX_STACK_DEPTH	 50
+#define DEFAULT_MAX_STACK_DEPTH 50
 
-#define DEFAULT_FG_TICKS         60000
-#define DEFAULT_BG_TICKS         30000
+#define DEFAULT_FG_TICKS 60000
+#define DEFAULT_BG_TICKS 30000
 
-#define DEFAULT_FG_SECONDS       5
-#define DEFAULT_BG_SECONDS       3
+#define DEFAULT_FG_SECONDS 5
+#define DEFAULT_BG_SECONDS 3
 
-#define DEFAULT_LAG_THRESHOLD    5.0
+#define DEFAULT_LAG_THRESHOLD 5.0
 
 /******************************************************************************
  * DEFAULT_PORT is the TCP port number on which the server listenes when no
  * port argument is given on the command line.
  */
 
-#define DEFAULT_PORT 		7777
+#define DEFAULT_PORT 7777
 
 /******************************************************************************
  * MP_SELECT	 The server will assume that the select() system call exists.
@@ -191,8 +191,8 @@
 
 #define USE_TLS
 #define VERIFY_TLS_PEERS
-#define DEFAULT_TLS_CERT    "/etc/letsencrypt/live/fullchain.pem"
-#define DEFAULT_TLS_KEY     "/etc/letsencrypt/live/privkey.pem"
+#define DEFAULT_TLS_CERT "/etc/letsencrypt/live/fullchain.pem"
+#define DEFAULT_TLS_KEY "/etc/letsencrypt/live/privkey.pem"
 #define LOG_TLS_CONNECTIONS
 
 /******************************************************************************
@@ -223,10 +223,10 @@
  * the default value specified here.
  */
 
-#define MAX_QUEUED_OUTPUT         65536
-#define MAX_QUEUED_INPUT          MAX_QUEUED_OUTPUT
-#define MAX_LINE_BYTES            5242880
-#define DEFAULT_CONNECT_TIMEOUT   300
+#define MAX_QUEUED_OUTPUT 65536
+#define MAX_QUEUED_INPUT MAX_QUEUED_OUTPUT
+#define MAX_LINE_BYTES 5242880
+#define DEFAULT_CONNECT_TIMEOUT 300
 
 /* In order to avoid weirdness from these limits being set too small,
  * we impose the following (arbitrary) respective minimum values.
@@ -235,7 +235,7 @@
  * likewise for the other options.
  */
 
-#define MIN_MAX_QUEUED_OUTPUT         2048
+#define MIN_MAX_QUEUED_OUTPUT 2048
 
 /******************************************************************************
  * On connections that have not been set to binary mode, the server normally
@@ -254,7 +254,7 @@
  * Do not set either value to a number less than 1.
  */
 
-#define PATTERN_CACHE_SIZE      20
+#define PATTERN_CACHE_SIZE 20
 #define PCRE_PATTERN_CACHE_SIZE 20
 
 /******************************************************************************
@@ -352,9 +352,9 @@
  ******************************************************************************
  */
 
-#define DEFAULT_MAX_STRING_CONCAT    64537861
+#define DEFAULT_MAX_STRING_CONCAT 64537861
 #define DEFAULT_MAX_LIST_VALUE_BYTES 64537861
-#define DEFAULT_MAX_MAP_VALUE_BYTES  64537861
+#define DEFAULT_MAX_MAP_VALUE_BYTES 64537861
 
 /* In order to avoid weirdness from these limits being set too small,
  * we impose the following (arbitrary) respective minimum values.
@@ -363,9 +363,9 @@
  * likewise for the list and map limits.
  */
 
-#define MIN_STRING_CONCAT_LIMIT    1021
+#define MIN_STRING_CONCAT_LIMIT 1021
 #define MIN_LIST_VALUE_BYTES_LIMIT 1021
-#define MIN_MAP_VALUE_BYTES_LIMIT  1021
+#define MIN_MAP_VALUE_BYTES_LIMIT 1021
 
 /******************************************************************************
  * In the original LambdaMOO server, last chance command processing
@@ -399,7 +399,7 @@
 
 #define FILE_SUBDIR "files/"
 #define FILE_IO_BUFFER_LENGTH 4096
-#define FILE_IO_MAX_FILES     256
+#define FILE_IO_MAX_FILES 256
 
 /******************************************************************************
  * Enable log output colorization.
@@ -508,8 +508,8 @@
  ******************************************************************************
  */
 
-#define TOTAL_BACKGROUND_THREADS    2
-#define DEFAULT_THREAD_MODE         true
+#define TOTAL_BACKGROUND_THREADS 2
+#define DEFAULT_THREAD_MODE true
 
 /******************************************************************************
  * By default, the server will resolve DNS hostnames from IP addresses for all
@@ -566,73 +566,70 @@
 #endif
 
 #if PATTERN_CACHE_SIZE < 1
-#  error Illegal match() pattern cache size!
+#error Illegal match() pattern cache size!
 #endif
 
-#define NP_TCP		1
+#define NP_TCP 1
 
-#define NS_BSD		1
+#define NS_BSD 1
 
-#define MP_SELECT	1
-#define MP_POLL		2
+#define MP_SELECT 1
+#define MP_POLL 2
 
 #include "config.h"
 
 #ifndef USE_TLS
- #define USE_TLS_BOOL
- #define TLS_CERT_PATH
- #define TLS_CERT_PATH_DEF
- #define USE_TLS_BOOL_DEF
- #define SSL_CONTEXT_1_ARG
- #define SSL_CONTEXT_1_DEF
- #define SSL_CONTEXT_2_ARG
- #define SSL_CONTEXT_2_DEF
+#define USE_TLS_BOOL
+#define TLS_CERT_PATH
+#define TLS_CERT_PATH_DEF
+#define USE_TLS_BOOL_DEF
+#define SSL_CONTEXT_1_ARG
+#define SSL_CONTEXT_1_DEF
+#define SSL_CONTEXT_2_ARG
+#define SSL_CONTEXT_2_DEF
 #else
 /* With TLS being optional and needing to pass around so many arguments,
  * I decided this would look nicer than splitting everything up
  * with ifdefs everywhere... */
- #define USE_TLS_BOOL , use_tls
- #define USE_TLS_BOOL_DEF , bool use_tls
- #define TLS_CERT_PATH , certificate_path, key_path
- #define TLS_CERT_PATH_DEF , const char *certificate_path, const char *key_path
- #define SSL_CONTEXT_2_ARG , &tls
- #define SSL_CONTEXT_2_DEF , SSL **tls
- #define SSL_CONTEXT_1_ARG , tls
- #define SSL_CONTEXT_1_DEF , SSL *tls
+#define USE_TLS_BOOL , use_tls
+#define USE_TLS_BOOL_DEF , bool use_tls
+#define TLS_CERT_PATH , certificate_path, key_path
+#define TLS_CERT_PATH_DEF , const char *certificate_path, const char *key_path
+#define SSL_CONTEXT_2_ARG , &tls
+#define SSL_CONTEXT_2_DEF , SSL **tls
+#define SSL_CONTEXT_1_ARG , tls
+#define SSL_CONTEXT_1_DEF , SSL *tls
 #endif
 
 #if !defined(MPLEX_STYLE)
-#  if NETWORK_STYLE == NS_BSD
-#    if HAVE_POLL
-#       define MPLEX_STYLE MP_POLL
-#    elif HAVE_SELECT
-#      define MPLEX_STYLE MP_SELECT
-#    else
-#      #error Could not find select() or poll()!
-#    endif
-#   endif
+#if NETWORK_STYLE == NS_BSD
+#if HAVE_POLL
+#define MPLEX_STYLE MP_POLL
+#elif HAVE_SELECT
+#define MPLEX_STYLE MP_SELECT
+#else
+# #error Could not find select() or poll() !
+#endif
+#endif
 #endif
 
 /* make sure OUTBOUND_NETWORK has a value;
    for backward compatibility, use 1 if none given */
-#if defined(OUTBOUND_NETWORK) && (( 0 * OUTBOUND_NETWORK - 1 ) == 0)
+#if defined(OUTBOUND_NETWORK) && ((0 * OUTBOUND_NETWORK - 1) == 0)
 #undef OUTBOUND_NETWORK
 #define OUTBOUND_NETWORK 1
 #endif
 
-
 #if NETWORK_PROTOCOL != NP_TCP
-#  error Illegal value for "NETWORK_PROTOCOL"
+#error Illegal value for "NETWORK_PROTOCOL"
 #endif
 
 #if NETWORK_STYLE != NS_BSD
-#  error Illegal value for "NETWORK_STYLE"
+#error Illegal value for "NETWORK_STYLE"
 #endif
 
-#if defined(MPLEX_STYLE) 	\
-    && MPLEX_STYLE != MP_SELECT \
-    && MPLEX_STYLE != MP_POLL
-#  error Illegal value for "MPLEX_STYLE"
+#if defined(MPLEX_STYLE) && MPLEX_STYLE != MP_SELECT && MPLEX_STYLE != MP_POLL
+#error Illegal value for "MPLEX_STYLE"
 #endif
 
-#endif				/* !Options_h */
+#endif /* !Options_h */
