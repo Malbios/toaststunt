@@ -191,8 +191,8 @@
 
 #define USE_TLS
 #define VERIFY_TLS_PEERS
-#define DEFAULT_TLS_CERT "/etc/letsencrypt/live/fullchain.pem"
-#define DEFAULT_TLS_KEY "/etc/letsencrypt/live/privkey.pem"
+#define DEFAULT_TLS_CERT "/home/moo/fullchain.pem"
+#define DEFAULT_TLS_KEY "/home/moo/privkey.pem"
 #define LOG_TLS_CONNECTIONS
 
 /******************************************************************************
