@@ -49,7 +49,7 @@
  * because it will lose track of cyclic data structures.
  */
 
-#define ENABLE_GC
+/* #define ENABLE_GC */
 
 #define GC_ROOTS_LIMIT 2000
 
@@ -453,7 +453,7 @@
  * (The number defined is how many tasks will get saved.)
  ******************************************************************************
 */
-/* #define SAVE_FINISHED_TASKS 15 */
+#define SAVE_FINISHED_TASKS 15
 
 /******************************************************************************
  * For debugging tracebacks, it is possible to capture the variables for the
@@ -483,7 +483,7 @@
  * for logins that doesn't directly involve calling Argon2 in do_login_command.
  ******************************************************************************
 */
-/* #define THREAD_ARGON2 */
+#define THREAD_ARGON2
 
 /******************************************************************************
  * This option controls whether or not the server will fix object ownership
@@ -494,7 +494,7 @@
  * you can disable this option for a speed boost in larger databases.
  ******************************************************************************
 */
-#define SAFE_RECYCLE
+/* #define SAFE_RECYCLE */
 
 /******************************************************************************
  * Configurable options for the background subsystem.
@@ -508,7 +508,7 @@
  ******************************************************************************
  */
 
-#define TOTAL_BACKGROUND_THREADS 2
+#define TOTAL_BACKGROUND_THREADS 4
 #define DEFAULT_THREAD_MODE true
 
 /******************************************************************************
@@ -522,7 +522,7 @@
  ******************************************************************************
  */
 
-#define NO_NAME_LOOKUP 0
+#define NO_NAME_LOOKUP 1
 
 /******************************************************************************
  * This constant controls the maximum recursive depth that parse_json will
