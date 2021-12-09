@@ -1,0 +1,5 @@
+﻿UseTab: false
+IndentWidth: 4
+IndentCaseLabels: true
+ColumnLimit: 0
+BreakBeforeTernaryOperators: true
