@@ -15,8 +15,8 @@
     Pavel@Xerox.Com
  *****************************************************************************/
 
-#include "ast.h"
 #include "decompile.h"
+#include "ast.h"
 #include "opcode.h"
 #include "program.h"
 #include "server.h"
@@ -30,66 +30,62 @@ static int top_expr_stack;
 static Byte *hot_byte;
 static void *hot_node;
 static enum {
-    TOP, ENDBODY, BOTTOM, DONE
+    TOP,
+    ENDBODY,
+    BOTTOM,
+    DONE
 } hot_position;
 
 static int lineno;
 
 static void
-push_expr(Expr * expr)
-{
+push_expr(Expr *expr) {
     expr_stack[top_expr_stack++] = expr;
 }
 
 static Expr *
-pop_expr(void)
-{
+pop_expr(void) {
     if (!top_expr_stack)
         panic_moo("Empty expr stack in DECOMPILE!");
     return expr_stack[--top_expr_stack];
 }
 
-#define ADD_STMT(stmt)      \
-    do {                \
-        Stmt *temp = stmt;      \
-        \
-        *stmt_sink = temp;      \
-        stmt_sink = &(temp->next);  \
-        stmt_start = ptr - bc.vector;\
+#define ADD_STMT(stmt)                \
+    do {                              \
+        Stmt *temp = stmt;            \
+                                      \
+        *stmt_sink = temp;            \
+        stmt_sink = &(temp->next);    \
+        stmt_start = ptr - bc.vector; \
     } while (0);
 
-#define ADD_ARM(arm)        \
-    do {                \
-        Cond_Arm *temp = arm;   \
-        \
-        *arm_sink = temp;       \
-        arm_sink = &(temp->next);   \
+#define ADD_ARM(arm)              \
+    do {                          \
+        Cond_Arm *temp = arm;     \
+                                  \
+        *arm_sink = temp;         \
+        arm_sink = &(temp->next); \
     } while (0);
 
-#define SKIP_BYTES(n)  ((void)(ptr += n))
-#define READ_BYTES(n)           \
-    (ptr += n,                \
-     (n == 1              \
-      ? ptr[-1]               \
-      : (n == 2               \
-         ? ((unsigned) ptr[-2] << 8)  \
-         + ptr[-1]          \
-         : ((unsigned) ptr[-4] << 24) \
-         + ((unsigned) ptr[-3] << 16)   \
-         + ((unsigned) ptr[-2] << 8)    \
-         + ptr[-1])))
+#define SKIP_BYTES(n) ((void)(ptr += n))
+#define READ_BYTES(n)                                 \
+    (ptr += n,                                        \
+     (n == 1                                          \
+          ? ptr[-1]                                   \
+          : (n == 2                                   \
+                 ? ((unsigned)ptr[-2] << 8) + ptr[-1] \
+                 : ((unsigned)ptr[-4] << 24) + ((unsigned)ptr[-3] << 16) + ((unsigned)ptr[-2] << 8) + ptr[-1])))
 
-#define READ_LABEL()    READ_BYTES(bc.numbytes_label)
-#define READ_LITERAL()  program->literals[READ_BYTES(bc.numbytes_literal)]
+#define READ_LABEL() READ_BYTES(bc.numbytes_label)
+#define READ_LITERAL() program->literals[READ_BYTES(bc.numbytes_literal)]
 #define READ_FORK() program->fork_vectors[READ_BYTES(bc.numbytes_fork)]
-#define READ_ID()   READ_BYTES(bc.numbytes_var_name)
-#define READ_STACK()    SKIP_BYTES(bc.numbytes_stack)
+#define READ_ID() READ_BYTES(bc.numbytes_var_name)
+#define READ_STACK() SKIP_BYTES(bc.numbytes_stack)
 
-#define READ_JUMP(is_hot)   read_jump(bc.numbytes_label, &ptr, &is_hot)
+#define READ_JUMP(is_hot) read_jump(bc.numbytes_label, &ptr, &is_hot)
 
 static unsigned
-read_jump(unsigned numbytes_label, Byte ** p, int *is_hot)
-{
+read_jump(unsigned numbytes_label, Byte **p, int *is_hot) {
     Byte *ptr = *p;
     unsigned label;
 
@@ -103,8 +99,8 @@ read_jump(unsigned numbytes_label, Byte ** p, int *is_hot)
     return label;
 }
 
-#define HOT(is_hot, n)      (node = n, is_hot ? (hot_node = node) : node)
-#define HOT1(is_hot, kid, n)    HOT(is_hot || hot_node == kid, n)
+#define HOT(is_hot, n) (node = n, is_hot ? (hot_node = node) : node)
+#define HOT1(is_hot, kid, n) HOT(is_hot || hot_node == kid, n)
 #define HOT2(is_hot, kid1, kid2, n) \
     HOT1(is_hot || hot_node == kid1, kid2, n)
 #define HOT3(is_hot, kid1, kid2, kid3, n) \
@@ -112,23 +108,25 @@ read_jump(unsigned numbytes_label, Byte ** p, int *is_hot)
 #define HOT4(is_hot, kid1, kid2, kid3, kid4, n) \
     HOT3(is_hot || hot_node == kid1, kid2, kid3, kid4, n)
 
-#define HOT_OP(n)       HOT(op_hot, n)
-#define HOT_OP1(kid, n)     HOT1(op_hot, kid, n)
-#define HOT_OP2(kid1, kid2, n)  HOT2(op_hot, kid1, kid2, n)
-#define HOT_OP3(kid1, kid2, kid3, n)    \
+#define HOT_OP(n) HOT(op_hot, n)
+#define HOT_OP1(kid, n) HOT1(op_hot, kid, n)
+#define HOT_OP2(kid1, kid2, n) HOT2(op_hot, kid1, kid2, n)
+#define HOT_OP3(kid1, kid2, kid3, n) \
     HOT3(op_hot, kid1, kid2, kid3, n)
 
 #define HOT_POS(is_hot, n, pos) \
-    if (is_hot) { hot_node = n; hot_position = pos; }
-#define HOT_BOTTOM(is_hot, n)   HOT_POS(is_hot, n, BOTTOM)
+    if (is_hot) {               \
+        hot_node = n;           \
+        hot_position = pos;     \
+    }
+#define HOT_BOTTOM(is_hot, n) HOT_POS(is_hot, n, BOTTOM)
 
-#define DECOMPILE(bc, start, end, stmt_sink, arm_sink)  \
+#define DECOMPILE(bc, start, end, stmt_sink, arm_sink) \
     (ptr = decompile(bc, start, end, stmt_sink, arm_sink))
 
 static Byte *
-decompile(Bytecodes bc, Byte * start, Byte * end, Stmt ** stmt_sink,
-          Cond_Arm ** arm_sink)
-{
+decompile(Bytecodes bc, Byte *start, Byte *end, Stmt **stmt_sink,
+          Cond_Arm **arm_sink) {
     /*** The reader will likely find it useful to consult the file
      *** `MOOCodeSequences.txt' in this directory while reading this function.
      ***/
@@ -162,7 +160,7 @@ decompile(Bytecodes bc, Byte * start, Byte * end, Stmt ** stmt_sink,
             e->e.id = PUSH_CLEAR_n_INDEX(op);
             push_expr((Expr *)HOT_OP(e));
             continue;
-#endif              /* BYTECODE_REDUCE_REF */
+#endif /* BYTECODE_REDUCE_REF */
         } else if (IS_PUT_n(op)) {
             e = alloc_expr(EXPR_ID);
             e->e.id = PUT_n_INDEX(op);
@@ -176,8 +174,7 @@ decompile(Bytecodes bc, Byte * start, Byte * end, Stmt ** stmt_sink,
             continue;
         }
         switch (op) {
-            case OP_IF:
-            {
+            case OP_IF: {
                 unsigned next = READ_LABEL();
                 Expr *condition = pop_expr();
                 Stmt *arm_stmts;
@@ -195,10 +192,8 @@ decompile(Bytecodes bc, Byte * start, Byte * end, Stmt ** stmt_sink,
                           &(arm->next));
 
                 ADD_STMT(s);
-            }
-            break;
-            case OP_EIF:
-            {
+            } break;
+            case OP_EIF: {
                 unsigned next = READ_LABEL();
                 Expr *condition = pop_expr();
                 Stmt *arm_stmts;
@@ -214,10 +209,8 @@ decompile(Bytecodes bc, Byte * start, Byte * end, Stmt ** stmt_sink,
                 if (bc.vector + done != end)
                     panic_moo("ELSEIF jumps to wrong place in DECOMPILE!");
                 stmt_start = ptr - bc.vector;
-            }
-            break;
-            case OP_FOR_RANGE:
-            {
+            } break;
+            case OP_FOR_RANGE: {
                 unsigned top = (ptr - 1) - bc.vector;
                 int id = READ_ID();
                 unsigned done = READ_LABEL();
@@ -235,30 +228,26 @@ decompile(Bytecodes bc, Byte * start, Byte * end, Stmt ** stmt_sink,
                     panic_moo("FOR_RANGE jumps to wrong place in DECOMPILE!");
                 HOT_BOTTOM(jump_hot, s);
                 ADD_STMT((Stmt *)HOT_OP2(from, to, s));
-            }
-            break;
+            } break;
             case OP_WHILE:
                 s = alloc_stmt(STMT_WHILE);
                 s->s.loop.id = -1;
-finish_while:
-                {
-                    unsigned top = stmt_start;
-                    unsigned done = READ_LABEL();
-                    Expr *condition = pop_expr();
-                    int jump_hot;
+            finish_while : {
+                unsigned top = stmt_start;
+                unsigned done = READ_LABEL();
+                Expr *condition = pop_expr();
+                int jump_hot;
 
-                    s->s.loop.condition = condition;
-                    DECOMPILE(bc, ptr, bc.vector + done - jump_len,
-                              &(s->s.loop.body), nullptr);
-                    if (top != READ_JUMP(jump_hot))
-                        panic_moo("WHILE jumps to wrong place in DECOMPILE!");
-                    HOT_BOTTOM(jump_hot, s);
-                    ADD_STMT((Stmt *)HOT_OP1(condition, s));
-                }
-                break;
+                s->s.loop.condition = condition;
+                DECOMPILE(bc, ptr, bc.vector + done - jump_len,
+                          &(s->s.loop.body), nullptr);
+                if (top != READ_JUMP(jump_hot))
+                    panic_moo("WHILE jumps to wrong place in DECOMPILE!");
+                HOT_BOTTOM(jump_hot, s);
+                ADD_STMT((Stmt *)HOT_OP1(condition, s));
+            } break;
             case OP_FORK:
-            case OP_FORK_WITH_ID:
-            {
+            case OP_FORK_WITH_ID: {
                 Bytecodes fbc;
                 int id;
                 Expr *time = pop_expr();
@@ -268,12 +257,11 @@ finish_while:
                 s = alloc_stmt(STMT_FORK);
                 s->s.fork.id = id;
                 s->s.fork.time = time;
-                (void) decompile(fbc, fbc.vector, fbc.vector + fbc.size,
-                                 &(s->s.fork.body), nullptr);
+                (void)decompile(fbc, fbc.vector, fbc.vector + fbc.size,
+                                &(s->s.fork.body), nullptr);
                 HOT_BOTTOM(hot_byte == fbc.vector + fbc.size - 1, s);
                 ADD_STMT((Stmt *)HOT_OP1(time, s));
-            }
-            break;
+            } break;
             case OP_POP:
                 s = alloc_stmt(STMT_EXPR);
                 e = s->s.expr = pop_expr();
@@ -300,8 +288,7 @@ finish_while:
                 push_expr((Expr *)HOT_OP(e));
                 break;
             case OP_AND:
-            case OP_OR:
-            {
+            case OP_OR: {
                 unsigned done = READ_LABEL();
 
                 e = pop_expr();
@@ -311,8 +298,7 @@ finish_while:
                 e = alloc_binary(op == OP_AND ? EXPR_AND : EXPR_OR,
                                  e, pop_expr());
                 push_expr((Expr *)HOT_OP2(e->e.bin.lhs, e->e.bin.rhs, e));
-            }
-            break;
+            } break;
             case OP_UNARY_MINUS:
             case OP_NOT:
                 e = alloc_expr(op == OP_NOT ? EXPR_NOT : EXPR_NEGATE);
@@ -362,13 +348,12 @@ finish_while:
             case OP_REF:
             case OP_PUSH_REF:
                 kind = EXPR_INDEX;
-finish_binary:
+            finish_binary:
                 e = pop_expr();
                 e = alloc_binary(kind, pop_expr(), e);
                 push_expr((Expr *)HOT_OP2(e->e.bin.lhs, e->e.bin.rhs, e));
                 break;
-            case OP_RANGE_REF:
-            {
+            case OP_RANGE_REF: {
                 Expr *e1 = pop_expr();
                 Expr *e2 = pop_expr();
 
@@ -377,10 +362,8 @@ finish_binary:
                 e->e.range.from = e2;
                 e->e.range.to = e1;
                 push_expr((Expr *)HOT_OP3(e1, e2, e->e.range.base, e));
-            }
-            break;
-            case OP_BI_FUNC_CALL:
-            {
+            } break;
+            case OP_BI_FUNC_CALL: {
                 Expr *a = pop_expr();
 
                 if (a->kind != EXPR_LIST)
@@ -388,12 +371,10 @@ finish_binary:
                 e = alloc_expr(EXPR_CALL);
                 e->e.call.args = a->e.list;
                 dealloc_node(a);
-                e->e.call.func = READ_BYTES(1);
+                e->e.call.func = READ_BYTES(2);
                 push_expr((Expr *)HOT_OP1(a, e));
-            }
-            break;
-            case OP_CALL_VERB:
-            {
+            } break;
+            case OP_CALL_VERB: {
                 Expr *a = pop_expr();
                 Expr *e2 = pop_expr();
 
@@ -402,10 +383,8 @@ finish_binary:
                 e = alloc_verb(pop_expr(), e2, a->e.list);
                 dealloc_node(a);
                 push_expr((Expr *)HOT_OP3(e->e.verb.obj, a, e2, e));
-            }
-            break;
-            case OP_IF_QUES:
-            {
+            } break;
+            case OP_IF_QUES: {
                 unsigned label = READ_LABEL();
                 int jump_hot;
 
@@ -421,8 +400,7 @@ finish_binary:
                 push_expr((Expr *)HOT3(op_hot || jump_hot, e->e.cond.condition,
                                        e->e.cond.consequent, e->e.cond.alternate,
                                        e));
-            }
-            break;
+            } break;
             case OP_PUT_TEMP:
                 /* Ignore; following RANGESET or INDEXSET does the work */
                 if (op_hot)
@@ -432,50 +410,47 @@ finish_binary:
                 /* Most of the lvalue has already been constructed on the stack.
                  * Add the final indexing.
                  */
-            {
-                Expr *rvalue = pop_expr();
-                Expr *index = pop_expr();
+                {
+                    Expr *rvalue = pop_expr();
+                    Expr *index = pop_expr();
 
-                e = alloc_binary(EXPR_INDEX, pop_expr(), index);
-                push_expr((Expr *)HOT3(op_hot || asgn_hot,
-                                       e->e.bin.lhs, index, rvalue,
-                                       alloc_binary(EXPR_ASGN, e, rvalue)));
-            }
-finish_indexed_assignment:
+                    e = alloc_binary(EXPR_INDEX, pop_expr(), index);
+                    push_expr((Expr *)HOT3(op_hot || asgn_hot,
+                                           e->e.bin.lhs, index, rvalue,
+                                           alloc_binary(EXPR_ASGN, e, rvalue)));
+                }
+            finish_indexed_assignment:
                 /* The remainder of this complex assignment code sequence is
                  * useless for the purpose of decompilation.
                  */
-            asgn_hot = 0;
-            while (*ptr != OP_PUSH_TEMP) {
-                if (ptr == hot_byte)    /* it's our assignment expression */
-                    hot_node = expr_stack[top_expr_stack];
+                asgn_hot = 0;
+                while (*ptr != OP_PUSH_TEMP) {
+                    if (ptr == hot_byte) /* it's our assignment expression */
+                        hot_node = expr_stack[top_expr_stack];
+                    ptr++;
+                }
                 ptr++;
-            }
-            ptr++;
-            break;
+                break;
             case OP_G_PUT:
                 e = alloc_expr(EXPR_ID);
                 e->e.id = READ_ID();
                 e = alloc_binary(EXPR_ASGN, e, pop_expr());
                 push_expr((Expr *)HOT_OP1(e->e.bin.rhs, e));
                 break;
-            case OP_PUT_PROP:
-            {
+            case OP_PUT_PROP: {
                 Expr *rvalue = pop_expr();
 
                 e = pop_expr();
                 e = alloc_binary(EXPR_PROP, pop_expr(), e);
                 push_expr((Expr *)HOT_OP3(e->e.bin.lhs, e->e.bin.rhs, rvalue,
                                           alloc_binary(EXPR_ASGN, e, rvalue)));
-            }
-            break;
+            } break;
             case OP_MAP_CREATE:
                 e = alloc_expr(EXPR_MAP);
                 e->e.map = nullptr;
                 push_expr((Expr *)HOT_OP(e));
                 break;
-            case OP_MAP_INSERT:
-            {
+            case OP_MAP_INSERT: {
                 Expr *key, *value;
 
                 key = pop_expr();
@@ -483,14 +458,13 @@ finish_indexed_assignment:
                 e = pop_expr();
                 if (e->e.map) {
                     Map_List *last = e->e.map;
-                    while (last->next) last = last->next;
+                    while (last->next)
+                        last = last->next;
                     last->next = alloc_map_list(key, value);
-                }
-                else
+                } else
                     e->e.map = alloc_map_list(key, value);
                 push_expr((Expr *)HOT_OP2(e->e.map->key, e->e.map->value, e));
-            }
-            break;
+            } break;
             case OP_MAKE_EMPTY_LIST:
                 e = alloc_expr(EXPR_LIST);
                 e->e.list = nullptr;
@@ -507,8 +481,7 @@ finish_indexed_assignment:
                 push_expr((Expr *)HOT_OP1(e->e.list->expr, e));
                 break;
             case OP_LIST_ADD_TAIL:
-            case OP_LIST_APPEND:
-            {
+            case OP_LIST_APPEND: {
                 Expr *list;
                 Arg_List *a;
 
@@ -516,18 +489,18 @@ finish_indexed_assignment:
                 list = pop_expr();
                 if (list->kind != EXPR_LIST)
                     panic_moo("Missing list expression in DECOMPILE!");
-                for (a = list->e.list; a->next; a = a->next);
+                for (a = list->e.list; a->next; a = a->next)
+                    ;
                 a->next = alloc_arg_list(op == OP_LIST_APPEND ? ARG_SPLICE
-                                         : ARG_NORMAL, e);
+                                                              : ARG_NORMAL,
+                                         e);
                 push_expr((Expr *)HOT_OP1(e, list));
-            }
-            break;
+            } break;
             case OP_PUSH_TEMP:
             case OP_JUMP:
                 panic_moo("Unexpected opcode in DECOMPILE!");
                 break;
-            case OP_EXTENDED:
-            {
+            case OP_EXTENDED: {
                 Extended_Opcode eop = (Extended_Opcode)(*ptr++);
 
                 switch (eop) {
@@ -535,19 +508,19 @@ finish_indexed_assignment:
                         /* Most of the lvalue has already been constructed on the
                          * stack.  Add the final subranging.
                          */
-                    {
-                        Expr *rvalue = pop_expr();
+                        {
+                            Expr *rvalue = pop_expr();
 
-                        e = alloc_expr(EXPR_RANGE);
-                        e->e.range.to = pop_expr();
-                        e->e.range.from = pop_expr();
-                        e->e.range.base = pop_expr();
-                        push_expr((Expr *)HOT4(op_hot || asgn_hot,
-                                               e->e.range.base, e->e.range.from,
-                                               e->e.range.to, rvalue,
-                                               alloc_binary(EXPR_ASGN, e, rvalue)));
-                    }
-                    goto finish_indexed_assignment;
+                            e = alloc_expr(EXPR_RANGE);
+                            e->e.range.to = pop_expr();
+                            e->e.range.from = pop_expr();
+                            e->e.range.base = pop_expr();
+                            push_expr((Expr *)HOT4(op_hot || asgn_hot,
+                                                   e->e.range.base, e->e.range.from,
+                                                   e->e.range.to, rvalue,
+                                                   alloc_binary(EXPR_ASGN, e, rvalue)));
+                        }
+                        goto finish_indexed_assignment;
                     case EOP_FIRST:
                         READ_STACK();
                         e = alloc_expr(EXPR_FIRST);
@@ -561,8 +534,7 @@ finish_indexed_assignment:
                     case EOP_EXP:
                         kind = EXPR_EXP;
                         goto finish_binary;
-                    case EOP_SCATTER:
-                    {
+                    case EOP_SCATTER: {
                         Scatter *sc, **scp;
                         int nargs = *ptr++;
                         int rest = (ptr++, *ptr++); /* skip nreq */
@@ -570,14 +542,13 @@ finish_indexed_assignment:
                         int i, done, is_hot = op_hot;
 
                         for (i = 1, scp = &sc;
-                                i <= nargs;
-                                i++, scp = &((*scp)->next)) {
+                             i <= nargs;
+                             i++, scp = &((*scp)->next)) {
                             int id = READ_ID();
                             int label = READ_LABEL();
 
-                            *scp = alloc_scatter(i == rest ? SCAT_REST :
-                                                 label == 0 ? SCAT_REQUIRED
-                                                 : SCAT_OPTIONAL,
+                            *scp = alloc_scatter(i == rest ? SCAT_REST : label == 0 ? SCAT_REQUIRED
+                                                                                    : SCAT_OPTIONAL,
                                                  id, nullptr);
                             if (label > 1) {
                                 (*scp)->label = label;
@@ -603,9 +574,7 @@ finish_indexed_assignment:
                                           nullptr, nullptr);
                                 defallt = pop_expr();
                                 HOT1(is_hot, defallt, e);
-                                if (defallt->kind != EXPR_ASGN
-                                        || defallt->e.bin.lhs->kind != EXPR_ID
-                                        || defallt->e.bin.lhs->e.id != sc->id)
+                                if (defallt->kind != EXPR_ASGN || defallt->e.bin.lhs->kind != EXPR_ID || defallt->e.bin.lhs->e.id != sc->id)
                                     panic_moo("Wrong variable in DECOMPILE!");
                                 sc->expr = defallt->e.bin.rhs;
                                 dealloc_node(defallt->e.bin.lhs);
@@ -618,32 +587,27 @@ finish_indexed_assignment:
                         push_expr((Expr *)HOT2(is_hot, e->e.bin.lhs, e->e.bin.rhs, e));
                         if (ptr != bc.vector + done)
                             panic_moo("Not at end of scatter in DECOMPILE!");
-                    }
-                    break;
+                    } break;
                     case EOP_PUSH_LABEL:
                         e = alloc_var(TYPE_INT);
                         e->e.var.v.num = READ_LABEL();
                         push_expr((Expr *)HOT_OP(e));
                         break;
-                    case EOP_CATCH:
-                    {
+                    case EOP_CATCH: {
                         Expr *label_expr = pop_expr();
                         Expr *codes = pop_expr();
                         Expr *try_expr, *default_expr = nullptr;
-                        Arg_List *a = nullptr;  /* silence warning */
+                        Arg_List *a = nullptr; /* silence warning */
                         int label, done;
                         int is_hot = op_hot;
 
-                        if (label_expr->kind != EXPR_VAR
-                                || label_expr->e.var.type != TYPE_INT)
+                        if (label_expr->kind != EXPR_VAR || label_expr->e.var.type != TYPE_INT)
                             panic_moo("Not a catch label in DECOMPILE!");
                         label = label_expr->e.var.v.num;
                         dealloc_node(label_expr);
                         if (codes->kind == EXPR_LIST)
                             a = codes->e.list;
-                        else if (codes->kind == EXPR_VAR
-                                 && codes->e.var.type == TYPE_INT
-                                 && codes->e.var.v.num == 0)
+                        else if (codes->kind == EXPR_VAR && codes->e.var.type == TYPE_INT && codes->e.var.v.num == 0)
                             a = nullptr;
                         else
                             panic_moo("Not a codes expression in DECOMPILE!");
@@ -676,20 +640,17 @@ finish_indexed_assignment:
                         e->e._catch._try = try_expr;
                         e->e._catch.codes = a;
                         e->e._catch.except = default_expr;
-                        push_expr((Expr *)HOT3(is_hot || (default_expr
-                                                          && default_expr == hot_node),
+                        push_expr((Expr *)HOT3(is_hot || (default_expr && default_expr == hot_node),
                                                label_expr, codes, try_expr,
                                                e));
-                    }
-                    break;
+                    } break;
                     case EOP_END_CATCH:
                         /* Early exit; main logic is in CATCH case, above. */
                         return ptr - 2;
-                    case EOP_TRY_EXCEPT:
-                    {
+                    case EOP_TRY_EXCEPT: {
                         Expr *label_expr;
                         Except_Arm *ex;
-                        Arg_List *a = nullptr;  /* silence warning */
+                        Arg_List *a = nullptr; /* silence warning */
                         int count = *ptr++, label;
                         unsigned done;
 
@@ -697,17 +658,14 @@ finish_indexed_assignment:
                         s->s._catch.excepts = nullptr;
                         while (count--) {
                             label_expr = pop_expr();
-                            if (label_expr->kind != EXPR_VAR
-                                    || label_expr->e.var.type != TYPE_INT)
+                            if (label_expr->kind != EXPR_VAR || label_expr->e.var.type != TYPE_INT)
                                 panic_moo("Not an except label in DECOMPILE!");
                             label = label_expr->e.var.v.num;
                             dealloc_node(label_expr);
                             e = pop_expr();
                             if (e->kind == EXPR_LIST)
                                 a = e->e.list;
-                            else if (e->kind == EXPR_VAR
-                                     && e->e.var.type == TYPE_INT
-                                     && e->e.var.v.num == 0)
+                            else if (e->kind == EXPR_VAR && e->e.var.type == TYPE_INT && e->e.var.v.num == 0)
                                 a = nullptr;
                             else
                                 panic_moo("Not a codes expression in DECOMPILE!");
@@ -754,13 +712,11 @@ finish_indexed_assignment:
                         if (ptr - bc.vector != done)
                             panic_moo("EXCEPTS end in wrong place in DECOMPILE!");
                         ADD_STMT(s);
-                    }
-                    break;
+                    } break;
                     case EOP_END_EXCEPT:
                         /* Early exit; main logic is in TRY_EXCEPT case, above. */
                         return ptr - 2;
-                    case EOP_TRY_FINALLY:
-                    {
+                    case EOP_TRY_FINALLY: {
                         int label = READ_LABEL();
 
                         s = (Stmt *)HOT_OP(alloc_stmt(STMT_TRY_FINALLY));
@@ -776,8 +732,7 @@ finish_indexed_assignment:
                         if (*ptr++ != EOP_CONTINUE)
                             panic_moo("Missing CONTINUE in DECOMPILE!");
                         ADD_STMT(s);
-                    }
-                    break;
+                    } break;
                     case EOP_END_FINALLY:
                     case EOP_CONTINUE:
                         /* Early exit; main logic is in TRY_FINALLY case, above. */
@@ -799,8 +754,7 @@ finish_indexed_assignment:
                         ADD_STMT((Stmt *)HOT_OP(s));
                         break;
 
-                    case EOP_FOR_LIST_1:
-                    {
+                    case EOP_FOR_LIST_1: {
                         unsigned top = (ptr - 2) - bc.vector;
                         int id = READ_ID();
                         unsigned done = READ_LABEL();
@@ -808,8 +762,7 @@ finish_indexed_assignment:
                         Expr *list = pop_expr();
                         int jump_hot;
 
-                        if (iter->kind != EXPR_VAR
-                                || iter->e.var.type != TYPE_NONE)
+                        if (iter->kind != EXPR_VAR || iter->e.var.type != TYPE_NONE)
                             panic_moo("Not a `none' value in DECOMPILE!");
                         else
                             dealloc_node(iter);
@@ -823,11 +776,9 @@ finish_indexed_assignment:
                             panic_moo("FOR_LIST_1 jumps to wrong place in DECOMPILE!");
                         HOT_BOTTOM(jump_hot, s);
                         ADD_STMT((Stmt *)HOT_OP2(iter, list, s));
-                    }
-                    break;
+                    } break;
 
-                    case EOP_FOR_LIST_2:
-                    {
+                    case EOP_FOR_LIST_2: {
                         unsigned top = (ptr - 2) - bc.vector;
                         int id = READ_ID();
                         int index = READ_ID();
@@ -836,8 +787,7 @@ finish_indexed_assignment:
                         Expr *list = pop_expr();
                         int jump_hot;
 
-                        if (iter->kind != EXPR_VAR
-                                || iter->e.var.type != TYPE_NONE)
+                        if (iter->kind != EXPR_VAR || iter->e.var.type != TYPE_NONE)
                             panic_moo("Not a `none' value in DECOMPILE!");
                         else
                             dealloc_node(iter);
@@ -851,8 +801,7 @@ finish_indexed_assignment:
                             panic_moo("FOR_LIST_2 jumps to wrong place in DECOMPILE!");
                         HOT_BOTTOM(jump_hot, s);
                         ADD_STMT((Stmt *)HOT_OP2(iter, list, s));
-                    }
-                    break;
+                    } break;
 
                     case EOP_BITOR:
                         kind = EXPR_BITOR;
@@ -868,7 +817,7 @@ finish_indexed_assignment:
                         goto finish_extended_binary;
                     case EOP_BITSHR:
                         kind = EXPR_BITSHR;
-finish_extended_binary:
+                    finish_extended_binary:
                         e = pop_expr();
                         e = alloc_binary(kind, pop_expr(), e);
                         push_expr((Expr *)HOT_OP2(e->e.bin.lhs, e->e.bin.rhs, e));
@@ -883,8 +832,7 @@ finish_extended_binary:
                     default:
                         panic_moo("Unknown extended opcode in DECOMPILE!");
                 }
-            }
-            break;
+            } break;
             default:
                 panic_moo("Unknown opcode in DECOMPILE!");
         }
@@ -897,16 +845,15 @@ finish_extended_binary:
 }
 
 static Stmt *
-program_to_tree(Program * prog, int vector, int pc_vector, int pc)
-{
+program_to_tree(Program *prog, int vector, int pc_vector, int pc) {
     Stmt *result;
     Bytecodes bc;
     int i, sum;
 
     program = prog;
     bc = (pc_vector == MAIN_VECTOR
-          ? program->main_vector
-          : program->fork_vectors[pc_vector]);
+              ? program->main_vector
+              : program->fork_vectors[pc_vector]);
 
     if (pc < 0)
         hot_byte = nullptr;
@@ -925,8 +872,8 @@ program_to_tree(Program * prog, int vector, int pc_vector, int pc)
     top_expr_stack = 0;
 
     bc = (vector == MAIN_VECTOR
-          ? program->main_vector
-          : program->fork_vectors[vector]);
+              ? program->main_vector
+              : program->fork_vectors[vector]);
 
     begin_code_allocation();
     decompile(bc, bc.vector, bc.vector + bc.size, &result, nullptr);
@@ -938,14 +885,12 @@ program_to_tree(Program * prog, int vector, int pc_vector, int pc)
 }
 
 Stmt *
-decompile_program(Program * prog, int vector)
-{
+decompile_program(Program *prog, int vector) {
     return program_to_tree(prog, vector, MAIN_VECTOR, -1);
 }
 
 static int
-find_hot_node(Stmt * stmt)
-{
+find_hot_node(Stmt *stmt) {
     /* Invariants: on entry, lineno is number of first line of STMT
      *                   on exit, if result is true,
      *                            lineno is line number of hot_node/position
@@ -957,45 +902,43 @@ find_hot_node(Stmt * stmt)
             return 1;
 
         switch (stmt->kind) {
-            case STMT_COND:
-            {
+            case STMT_COND: {
                 Cond_Arm *arm;
 
                 for (arm = stmt->s.cond.arms; arm; arm = arm->next) {
                     if (arm == hot_node && hot_position == TOP)
                         return 1;
-                    lineno++;   /* advance to arm body */
+                    lineno++; /* advance to arm body */
                     if (find_hot_node(arm->stmt))
                         return 1;
                     else if (arm == hot_node && hot_position == BOTTOM) {
-                        lineno--;   /* Blame last line of arm */
+                        lineno--; /* Blame last line of arm */
                         return 1;
                     }
                 }
                 if (stmt->s.cond.otherwise) {
-                    lineno++;   /* Skip `else' line */
+                    lineno++; /* Skip `else' line */
                     if (find_hot_node(stmt->s.cond.otherwise))
                         return 1;
                 }
-            }
-            break;
+            } break;
             case STMT_LIST:
-                lineno++;       /* Skip `for' line */
+                lineno++; /* Skip `for' line */
                 if (find_hot_node(stmt->s.list.body))
                     return 1;
                 break;
             case STMT_RANGE:
-                lineno++;       /* Skip `for' line */
+                lineno++; /* Skip `for' line */
                 if (find_hot_node(stmt->s.range.body))
                     return 1;
                 break;
             case STMT_WHILE:
-                lineno++;       /* Skip `while' line */
+                lineno++; /* Skip `while' line */
                 if (find_hot_node(stmt->s.loop.body))
                     return 1;
                 break;
             case STMT_FORK:
-                lineno++;       /* Skip `fork' line */
+                lineno++; /* Skip `fork' line */
                 if (find_hot_node(stmt->s.fork.body))
                     return 1;
                 break;
@@ -1005,36 +948,33 @@ find_hot_node(Stmt * stmt)
             case STMT_CONTINUE:
                 /* Nothing more to do */
                 break;
-            case STMT_TRY_EXCEPT:
-            {
+            case STMT_TRY_EXCEPT: {
                 Except_Arm *ex;
 
-                lineno++;   /* Skip `try' line */
+                lineno++; /* Skip `try' line */
                 if (find_hot_node(stmt->s._catch.body))
                     return 1;
                 if (stmt == hot_node && hot_position == ENDBODY) {
-                    lineno--;   /* blame it on last line of body */
+                    lineno--; /* blame it on last line of body */
                     return 1;
                 }
                 for (ex = stmt->s._catch.excepts; ex; ex = ex->next) {
                     if (ex == hot_node && hot_position == TOP)
                         return 1;
-                    lineno++;   /* skip `except' line */
+                    lineno++; /* skip `except' line */
                     if (find_hot_node(ex->stmt))
                         return 1;
                     if (ex == hot_node && hot_position == BOTTOM) {
-                        lineno--;   /* blame last line of handler */
+                        lineno--; /* blame last line of handler */
                         return 1;
                     }
                 }
-            }
-            break;
+            } break;
             case STMT_TRY_FINALLY:
-                lineno++;       /* Skip `try' line */
-                if (find_hot_node(stmt->s.finally.body)
-                        || (stmt == hot_node && hot_position == ENDBODY))
+                lineno++; /* Skip `try' line */
+                if (find_hot_node(stmt->s.finally.body) || (stmt == hot_node && hot_position == ENDBODY))
                     return 1;
-                lineno++;       /* Skip `finally' line */
+                lineno++; /* Skip `finally' line */
                 if (find_hot_node(stmt->s.finally.handler))
                     return 1;
                 break;
@@ -1045,15 +985,14 @@ find_hot_node(Stmt * stmt)
         if (stmt == hot_node && hot_position == BOTTOM)
             return 1;
 
-        lineno++;       /* Count this statement */
+        lineno++; /* Count this statement */
     }
 
     return 0;
 }
 
 unsigned
-find_line_number(Program * prog, int vector, unsigned pc)
-{
+find_line_number(Program *prog, int vector, unsigned pc) {
     Stmt *tree;
 
     if (prog->cached_lineno_pc == pc && prog->cached_lineno_vec == vector)

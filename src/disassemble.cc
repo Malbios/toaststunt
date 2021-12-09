@@ -37,94 +37,91 @@ struct mapping {
     const char *name;
 };
 
-struct mapping mappings[] =
-{
-    {OP_IF, "IF"},
-    {OP_WHILE, "WHILE"},
-    {OP_EIF, "ELSEIF"},
-    {OP_FORK, "FORK"},
-    {OP_FORK_WITH_ID, "FORK_NAMED"},
-    {OP_FOR_LIST, "FOR_LIST"},
-    {OP_FOR_RANGE, "FOR_RANGE"},
-    {OP_INDEXSET, "INDEXSET"},
-    {OP_PUSH_GET_PROP, "PUSH_GET_PROP"},
-    {OP_GET_PROP, "GET_PROP"},
-    {OP_CALL_VERB, "CALL_VERB"},
-    {OP_PUT_PROP, "PUT_PROP"},
-    {OP_BI_FUNC_CALL, "CALL_FUNC"},
-    {OP_IF_QUES, "IF_EXPR"},
-    {OP_REF, "INDEX"},
-    {OP_RANGE_REF, "RANGE"},
-    {OP_MAKE_SINGLETON_LIST, "MAKE_SINGLETON_LIST"},
-    {OP_CHECK_LIST_FOR_SPLICE, "CHECK_LIST_FOR_SPLICE"},
-    {OP_MULT, "MULTIPLY"},
-    {OP_DIV, "DIVIDE"},
-    {OP_MOD, "MOD"},
-    {OP_ADD, "ADD"},
-    {OP_MINUS, "SUBTRACT"},
-    {OP_EQ, "EQ"},
-    {OP_NE, "NE"},
-    {OP_LT, "LT"},
-    {OP_LE, "LE"},
-    {OP_GT, "GT"},
-    {OP_GE, "GE"},
-    {OP_IN, "IN"},
-    {OP_AND, "AND"},
-    {OP_OR, "OR"},
-    {OP_UNARY_MINUS, "NEGATE"},
-    {OP_NOT, "NOT"},
-    {OP_G_PUT, "PUT"},
-    {OP_G_PUSH, "PUSH"},
+const struct mapping mappings[] =
+    {
+        {OP_IF, "IF"},
+        {OP_WHILE, "WHILE"},
+        {OP_EIF, "ELSEIF"},
+        {OP_FORK, "FORK"},
+        {OP_FORK_WITH_ID, "FORK_NAMED"},
+        {OP_FOR_LIST, "FOR_LIST"},
+        {OP_FOR_RANGE, "FOR_RANGE"},
+        {OP_INDEXSET, "INDEXSET"},
+        {OP_PUSH_GET_PROP, "PUSH_GET_PROP"},
+        {OP_GET_PROP, "GET_PROP"},
+        {OP_CALL_VERB, "CALL_VERB"},
+        {OP_PUT_PROP, "PUT_PROP"},
+        {OP_BI_FUNC_CALL, "CALL_FUNC"},
+        {OP_IF_QUES, "IF_EXPR"},
+        {OP_REF, "INDEX"},
+        {OP_RANGE_REF, "RANGE"},
+        {OP_MAKE_SINGLETON_LIST, "MAKE_SINGLETON_LIST"},
+        {OP_CHECK_LIST_FOR_SPLICE, "CHECK_LIST_FOR_SPLICE"},
+        {OP_MULT, "MULTIPLY"},
+        {OP_DIV, "DIVIDE"},
+        {OP_MOD, "MOD"},
+        {OP_ADD, "ADD"},
+        {OP_MINUS, "SUBTRACT"},
+        {OP_EQ, "EQ"},
+        {OP_NE, "NE"},
+        {OP_LT, "LT"},
+        {OP_LE, "LE"},
+        {OP_GT, "GT"},
+        {OP_GE, "GE"},
+        {OP_IN, "IN"},
+        {OP_AND, "AND"},
+        {OP_OR, "OR"},
+        {OP_UNARY_MINUS, "NEGATE"},
+        {OP_NOT, "NOT"},
+        {OP_G_PUT, "PUT"},
+        {OP_G_PUSH, "PUSH"},
 #ifdef BYTECODE_REDUCE_REF
-    {OP_G_PUSH_CLEAR, "PUSH_CLEAR"},
+        {OP_G_PUSH_CLEAR, "PUSH_CLEAR"},
 #endif /* BYTECODE_REDUCE_REF */
-    {OP_IMM, "PUSH_LITERAL"},
-    {OP_MAP_CREATE, "MAP_CREATE"},
-    {OP_MAP_INSERT, "MAP_INSERT"},
-    {OP_MAKE_EMPTY_LIST, "MAKE_EMPTY_LIST"},
-    {OP_LIST_ADD_TAIL, "LIST_ADD_TAIL"},
-    {OP_LIST_APPEND, "LIST_APPEND"},
-    {OP_PUSH_REF, "PUSH_INDEX"},
-    {OP_PUT_TEMP, "PUT_TEMP"},
-    {OP_PUSH_TEMP, "PUSH_TEMP"},
-    {OP_JUMP, "JUMP"},
-    {OP_RETURN, "RETURN"},
-    {OP_RETURN0, "RETURN 0"},
-    {OP_DONE, "DONE"},
-    {OP_POP, "POP"}
-};
+        {OP_IMM, "PUSH_LITERAL"},
+        {OP_MAP_CREATE, "MAP_CREATE"},
+        {OP_MAP_INSERT, "MAP_INSERT"},
+        {OP_MAKE_EMPTY_LIST, "MAKE_EMPTY_LIST"},
+        {OP_LIST_ADD_TAIL, "LIST_ADD_TAIL"},
+        {OP_LIST_APPEND, "LIST_APPEND"},
+        {OP_PUSH_REF, "PUSH_INDEX"},
+        {OP_PUT_TEMP, "PUT_TEMP"},
+        {OP_PUSH_TEMP, "PUSH_TEMP"},
+        {OP_JUMP, "JUMP"},
+        {OP_RETURN, "RETURN"},
+        {OP_RETURN0, "RETURN 0"},
+        {OP_DONE, "DONE"},
+        {OP_POP, "POP"}};
 
 struct mapping ext_mappings[] =
-{
-    {EOP_RANGESET, "RANGESET"},
-    {EOP_FIRST, "FIRST"},
-    {EOP_LAST, "LAST"},
-    {EOP_PUSH_LABEL, "PUSH_LABEL"},
-    {EOP_SCATTER, "SCATTER"},
-    {EOP_EXP, "EXPONENT"},
-    {EOP_CATCH, "CATCH"},
-    {EOP_END_CATCH, "END_CATCH"},
-    {EOP_TRY_EXCEPT, "TRY_EXCEPT"},
-    {EOP_END_EXCEPT, "END_EXCEPT"},
-    {EOP_TRY_FINALLY, "TRY_FINALLY"},
-    {EOP_END_FINALLY, "END_FINALLY"},
-    {EOP_CONTINUE, "CONTINUE"},
-    {EOP_WHILE_ID, "WHILE_ID"},
-    {EOP_EXIT, "EXIT"},
-    {EOP_FOR_LIST_1, "FOR_LIST_1"},
-    {EOP_FOR_LIST_2, "FOR_LIST_2"},
-    {EOP_EXIT_ID, "EXIT_ID"},
-    {EOP_BITOR, "BITOR"},
-    {EOP_BITAND, "BITAND"},
-    {EOP_BITXOR, "BITXOR"},
-    {EOP_BITSHL, "BITSHL"},
-    {EOP_BITSHR, "BITSHR"},
-    {EOP_COMPLEMENT, "COMPLEMENT"}
-};
+    {
+        {EOP_RANGESET, "RANGESET"},
+        {EOP_FIRST, "FIRST"},
+        {EOP_LAST, "LAST"},
+        {EOP_PUSH_LABEL, "PUSH_LABEL"},
+        {EOP_SCATTER, "SCATTER"},
+        {EOP_EXP, "EXPONENT"},
+        {EOP_CATCH, "CATCH"},
+        {EOP_END_CATCH, "END_CATCH"},
+        {EOP_TRY_EXCEPT, "TRY_EXCEPT"},
+        {EOP_END_EXCEPT, "END_EXCEPT"},
+        {EOP_TRY_FINALLY, "TRY_FINALLY"},
+        {EOP_END_FINALLY, "END_FINALLY"},
+        {EOP_CONTINUE, "CONTINUE"},
+        {EOP_WHILE_ID, "WHILE_ID"},
+        {EOP_EXIT, "EXIT"},
+        {EOP_FOR_LIST_1, "FOR_LIST_1"},
+        {EOP_FOR_LIST_2, "FOR_LIST_2"},
+        {EOP_EXIT_ID, "EXIT_ID"},
+        {EOP_BITOR, "BITOR"},
+        {EOP_BITAND, "BITAND"},
+        {EOP_BITXOR, "BITXOR"},
+        {EOP_BITSHL, "BITSHL"},
+        {EOP_BITSHR, "BITSHR"},
+        {EOP_COMPLEMENT, "COMPLEMENT"}};
 
 static void
-initialize_tables(void)
-{
+initialize_tables(void) {
     static int tables_initialized = 0;
     unsigned i;
 
@@ -145,27 +142,24 @@ initialize_tables(void)
     tables_initialized = 1;
 }
 
-typedef void (*Printer) (const char *, void *);
+typedef void (*Printer)(const char *, void *);
 static Printer print;
 static void *print_data;
 static int bytes_width, max_bytes_width;
 
 static void
-output(Stream * s)
-{
-    (*print) (reset_stream(s), print_data);
+output(Stream *s) {
+    (*print)(reset_stream(s), print_data);
 }
 
 static void
-new_insn(Stream * s, unsigned pc)
-{
+new_insn(Stream *s, unsigned pc) {
     stream_printf(s, "%3d:", pc);
     bytes_width = max_bytes_width;
 }
 
 static unsigned
-add_bytes(Stream * s, Byte * vector, unsigned pc, unsigned length)
-{
+add_bytes(Stream *s, Byte *vector, unsigned pc, unsigned length) {
     unsigned arg = 0, b;
 
     while (length--) {
@@ -184,8 +178,7 @@ add_bytes(Stream * s, Byte * vector, unsigned pc, unsigned length)
 }
 
 static void
-finish_insn(Stream * s, Stream * insn)
-{
+finish_insn(Stream *s, Stream *insn) {
     while (bytes_width--)
         stream_add_string(s, "    ");
     stream_add_string(s, reset_stream(insn));
@@ -193,8 +186,7 @@ finish_insn(Stream * s, Stream * insn)
 }
 
 static void
-disassemble(Program * prog, Printer p, void *data)
-{
+disassemble(Program *prog, Printer p, void *data) {
     Stream *s = new_stream(100);
     Stream *insn = new_stream(50);
     int i, l;
@@ -203,13 +195,13 @@ disassemble(Program * prog, Printer p, void *data)
     const char *ptr;
     const char **names = prog->var_names;
     unsigned tmp, num_names = prog->num_var_names;
-#   define NAMES(i) (tmp = i, tmp < num_names ? names[tmp] : "*** Unknown variable ***")
+#define NAMES(i) (tmp = i, tmp < num_names ? names[tmp] : "*** Unknown variable ***")
     Var *literals = prog->literals;
 
     initialize_tables();
     print = p;
     print_data = data;
-    stream_printf(s, "Language version number: %d", (int) prog->version);
+    stream_printf(s, "Language version number: %d", (int)prog->version);
     output(s);
     stream_printf(s, "First line number: %d", prog->first_lineno);
     output(s);
@@ -246,9 +238,9 @@ disassemble(Program * prog, Printer p, void *data)
         for (pc = 0; pc < bc.size;) {
             Byte b;
             unsigned arg;
-#       define ADD_BYTES(n) (arg = add_bytes(s, bc.vector, pc, n),  \
-                             pc += n,               \
-                             arg)
+#define ADD_BYTES(n) (arg = add_bytes(s, bc.vector, pc, n), \
+                      pc += n,                              \
+                      arg)
             unsigned a1, a2, a3;
 
             new_insn(s, pc);
@@ -269,7 +261,7 @@ disassemble(Program * prog, Printer p, void *data)
                 b = ADD_BYTES(1);
                 stream_add_string(insn, COUNT_EOP_TICK(b) ? " * " : "   ");
                 stream_add_string(insn, ext_mnemonics[b]);
-                switch ((Extended_Opcode) b) {
+                switch ((Extended_Opcode)b) {
                     case EOP_WHILE_ID:
                         a1 = ADD_BYTES(bc.numbytes_var_name);
                         a2 = ADD_BYTES(bc.numbytes_label);
@@ -297,8 +289,7 @@ disassemble(Program * prog, Printer p, void *data)
                     case EOP_LAST:
                         stream_printf(insn, " %d", ADD_BYTES(bc.numbytes_stack));
                         break;
-                    case EOP_SCATTER:
-                    {
+                    case EOP_SCATTER: {
                         int i, nargs = ADD_BYTES(1);
 
                         a1 = ADD_BYTES(1);
@@ -311,8 +302,7 @@ disassemble(Program * prog, Printer p, void *data)
                         }
                         stream_printf(insn, " %d",
                                       ADD_BYTES(bc.numbytes_label));
-                    }
-                    break;
+                    } break;
                     case EOP_FOR_LIST_1:
                         a1 = ADD_BYTES(bc.numbytes_var_name);
                         a2 = ADD_BYTES(bc.numbytes_label);
@@ -329,7 +319,7 @@ disassemble(Program * prog, Printer p, void *data)
                 }
             } else {
                 stream_add_string(insn, mnemonics[b]);
-                switch ((Opcode) b) {
+                switch ((Opcode)b) {
                     case OP_IF:
                     case OP_IF_QUES:
                     case OP_EIF:
@@ -361,8 +351,7 @@ disassemble(Program * prog, Printer p, void *data)
                         stream_printf(insn, " %s",
                                       NAMES(ADD_BYTES(bc.numbytes_var_name)));
                         break;
-                    case OP_IMM:
-                    {
+                    case OP_IMM: {
                         Var v;
 
                         v = literals[ADD_BYTES(bc.numbytes_literal)];
@@ -394,10 +383,9 @@ disassemble(Program * prog, Printer p, void *data)
                                               v.type);
                                 break;
                         }
-                    }
-                    break;
+                    } break;
                     case OP_BI_FUNC_CALL:
-                        stream_printf(insn, " %s", name_func_by_num(ADD_BYTES(1)));
+                        stream_printf(insn, " %s", name_func_by_num(ADD_BYTES(2)));
                     default:
                         break;
                 }
@@ -412,22 +400,17 @@ disassemble(Program * prog, Printer p, void *data)
 }
 
 static void
-print_line(const char *line, void *data)
-{
+print_line(const char *line, void *data) {
     FILE *f = (FILE *)data;
 
     fprintf(f, "%s\n", line);
 }
 
-void
-disassemble_to_file(FILE * fp, Program * prog)
-{
+void disassemble_to_file(FILE *fp, Program *prog) {
     disassemble(prog, print_line, fp);
 }
 
-void
-disassemble_to_stderr(Program * prog)
-{
+void disassemble_to_stderr(Program *prog) {
     disassemble_to_file(stderr, prog);
 }
 
@@ -437,8 +420,7 @@ struct data {
 };
 
 static void
-add_line(const char *line, void *data)
-{
+add_line(const char *line, void *data) {
     struct data *d = (struct data *)data;
 
     if (d->used >= d->max) {
@@ -457,8 +439,7 @@ add_line(const char *line, void *data)
 }
 
 static package
-bf_disassemble(Var arglist, Byte next, void *vdata, Objid progr)
-{
+bf_disassemble(Var arglist, Byte next, void *vdata, Objid progr) {
     Var obj = arglist.v.list[1];
     Var desc = arglist.v.list[2];
     db_verb_handle h;
@@ -470,8 +451,7 @@ bf_disassemble(Var arglist, Byte next, void *vdata, Objid progr)
     if (!obj.is_object()) {
         free_var(arglist);
         return make_error_pack(E_TYPE);
-    } else if ((e = validate_verb_descriptor(desc)) != E_NONE
-               || (e = E_INVARG, !is_valid(obj))) {
+    } else if ((e = validate_verb_descriptor(desc)) != E_NONE || (e = E_INVARG, !is_valid(obj))) {
         free_var(arglist);
         return make_error_pack(e);
     }
@@ -496,8 +476,6 @@ bf_disassemble(Var arglist, Byte next, void *vdata, Objid progr)
     return make_var_pack(r);
 }
 
-void
-register_disassemble(void)
-{
+void register_disassemble(void) {
     register_function("disassemble", 2, 2, bf_disassemble, TYPE_ANY, TYPE_ANY);
 }
