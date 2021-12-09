@@ -18,6 +18,7 @@
 #ifndef Functions_h
 #define Functions_h 1
 
+#include <optional>
 #include <stdio.h>
 
 #include "config.h"
@@ -27,36 +28,37 @@
 
 typedef struct {
     enum {
-	BI_RETURN,		/* Normal function return */
-	BI_RAISE,		/* Raising an error */
-	BI_CALL,		/* Making a nested verb call */
-	BI_SUSPEND,		/* Suspending the current task */
-	BI_KILL			/* Killing the current task */
+        BI_RETURN,  /* Normal function return */
+        BI_RAISE,   /* Raising an error */
+        BI_CALL,    /* Making a nested verb call */
+        BI_SUSPEND, /* Suspending the current task */
+        BI_KILL     /* Killing the current task */
     } kind;
     union {
-	Var ret;
-	struct {
-	    Var code;
-	    const char *msg;
-	    Var value;
-	} raise;
-	struct {
-	    Byte pc;
-	    void *data;
-	} call;
-	struct {
-	    enum error (*proc) (vm, void *);
-	    void *data;
-	} susp;
+        Var ret;
+        struct {
+            Var code;
+            const char *msg;
+            Var value;
+        } raise;
+        struct {
+            Byte pc;
+            void *data;
+        } call;
+        struct {
+            enum error (*proc)(vm, void *);
+            void *data;
+        } susp;
     } u;
 } package;
 
 void register_bi_functions(void);
+void unregister_bi_functions(void);
 
 enum abort_reason {
-    ABORT_KILL    = -1, 	/* kill_task(task_id()) */
-    ABORT_SECONDS = 0,		/* out of seconds */
-    ABORT_TICKS   = 1		/* out of ticks */
+    ABORT_KILL = -1,   /* kill_task(task_id()) */
+    ABORT_SECONDS = 0, /* out of seconds */
+    ABORT_TICKS = 1    /* out of ticks */
 };
 
 package make_abort_pack(enum abort_reason reason);
@@ -71,31 +73,24 @@ package make_suspend_pack(enum error (*)(vm, void *), void *);
 package make_int_pack(Num v);
 package make_float_pack(double v);
 
-typedef package(*bf_type) (Var, Byte, void *, Objid);
-typedef void (*bf_write_type) (void *vdata);
-typedef void *(*bf_read_type) (void);
-
-#define MAX_FUNC         256
-#define FUNC_NOT_FOUND   MAX_FUNC
-/* valid function numbers are 0 - 255, or a total of 256 of them.
-   function number 256 is reserved for func_not_found signal.
-   hence valid function numbers will fit in one byte but the 
-   func_not_found signal will not */
+typedef package (*bf_type)(Var, Byte, void *, Objid);
+typedef void (*bf_write_type)(void *vdata);
+typedef void *(*bf_read_type)(void);
 
 extern const char *name_func_by_num(unsigned);
-extern unsigned number_func_by_name(const char *);
+extern std::optional<unsigned> number_func_by_name(const char *);
 
-extern unsigned register_function(const char *, int, int, bf_type,...);
-extern unsigned register_function_with_read_write(const char *, int, int,
-						  bf_type, bf_read_type,
-						  bf_write_type,...);
+extern void register_function(const char *, int, int, bf_type, ...);
+extern void register_function_with_read_write(const char *, int, int,
+                                              bf_type, bf_read_type,
+                                              bf_write_type, ...);
 
 extern package call_bi_func(unsigned, Var, Byte, Objid, void *);
 /* will free or use Var arglist */
 
 extern void write_bi_func_data(void *vdata, Byte f_id);
 extern int read_bi_func_data(Byte f_id, void **bi_func_state,
-			     Byte * bi_func_pc);
+                             Byte *bi_func_pc);
 extern Byte *pc_for_bi_func_data(void);
 
 extern void load_server_options(void);

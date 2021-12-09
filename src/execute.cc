@@ -16,6 +16,7 @@
  *****************************************************************************/
 
 #include <chrono>
+#include <optional>
 #include <stdarg.h>
 #include <string.h>
 
@@ -47,6 +48,8 @@
 #include "utils.h"
 #include "version.h"
 #include "waif.h"
+
+using namespace std;
 
 /* the following globals are the guts of the virtual machine: */
 static activation *activ_stack = nullptr;
@@ -2899,9 +2902,9 @@ run_interpreter(char raise, enum error e,
     total_cputime.type = TYPE_FLOAT;
 
     interpreter_is_running = 1;
-    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    chrono::high_resolution_clock::time_point start = chrono::high_resolution_clock::now();
     ret = run(raise, e, result);
-    std::chrono::duration<double> elapsed = std::chrono::high_resolution_clock::now() - start;
+    chrono::duration<double> elapsed = chrono::high_resolution_clock::now() - start;
     total_cputime.v.fnum = elapsed.count();
     interpreter_is_running = 0;
 
@@ -3214,12 +3217,13 @@ bf_call_function(Var arglist, Byte next, void *vdata, Objid progr) {
     if (next == 1) { /* first call */
         const char *fname = arglist.v.list[1].v.str;
 
-        fnum = number_func_by_name(fname);
-        if (fnum == FUNC_NOT_FOUND) {
+        const auto result = number_func_by_name(fname);
+        if (!result.has_value()) {
             p = make_raise_pack(E_INVARG, "Unknown built-in function",
                                 var_ref(arglist.v.list[1]));
             free_var(arglist);
         } else {
+            fnum = *result;
             arglist = listdelete(arglist, 1);
             p = call_bi_func(fnum, arglist, next, progr, vdata);
         }
@@ -3257,11 +3261,17 @@ bf_call_function_read(void) {
 
     if (!strncmp(line, hdr, hlen)) {
         line += hlen;
-        if ((s->fnum = number_func_by_name(line)) == FUNC_NOT_FOUND)
+        const auto result = number_func_by_name(line);
+
+        if (!result.has_value())
             errlog("CALL_FUNCTION: Unknown built-in function: %s\n", line);
-        else if (read_bi_func_data(s->fnum, &s->data, pc_for_bi_func_data()))
+
+        s->fnum = *result;
+
+        if (read_bi_func_data(s->fnum, &s->data, pc_for_bi_func_data()))
             return s;
     }
+
     return nullptr;
 }
 
@@ -3744,9 +3754,9 @@ int read_activ(activation *a, int which_vector) {
     int max_stack;
     char c;
 
-    if (dbio_input_version < DBV_Float)
+    if (dbio_input_version < DBV_Float) {
         version = dbio_input_version;
-    else if (dbio_scanf("language version %u\n", &v) != 1) {
+    } else if (dbio_scanf("language version %u\n", &v) != 1) {
         errlog("READ_ACTIV: Malformed language version\n");
         return 0;
     } else if (version = (DB_Version)v, !check_db_version(version)) {
@@ -3754,66 +3764,80 @@ int read_activ(activation *a, int which_vector) {
                version);
         return 0;
     }
-    if (!(a->prog = dbio_read_program(version,
-                                      nullptr, (void *)"suspended task"))) {
+
+    if (!(a->prog = dbio_read_program(version, nullptr, (void *)"suspended task"))) {
         errlog("READ_ACTIV: Malformed program\n");
         return 0;
     }
+
     if (!read_rt_env(&old_names, &old_rt_env, &old_size)) {
         errlog("READ_ACTIV: Malformed runtime environment\n");
         return 0;
     }
+
     a->rt_env = reorder_rt_env(old_rt_env, old_names, old_size, a->prog);
 
     max_stack = (which_vector == MAIN_VECTOR
                      ? a->prog->main_vector.max_stack
                      : a->prog->fork_vectors[which_vector].max_stack);
+
     alloc_rt_stack(a, max_stack);
 
     if (dbio_scanf("%d rt_stack slots in use\n", &stack_in_use) != 1) {
         errlog("READ_ACTIV: Bad stack_in_use number\n");
         return 0;
     }
+
     a->top_rt_stack = a->base_rt_stack;
-    for (i = 0; i < stack_in_use; i++)
+
+    for (i = 0; i < stack_in_use; i++) {
         *(a->top_rt_stack++) = dbio_read_var();
+    }
 
     if (!read_activ_as_pi(a)) {
         errlog("READ_ACTIV: Bad activ. stack_in_use = %d\n", stack_in_use);
         return 0;
     }
+
     a->temp = dbio_read_var();
 
     if (dbio_scanf("%u %u%c", &a->pc, &i, &c) != 3) {
         errlog("READ_ACTIV: bad pc, next. stack_in_use = %d\n", stack_in_use);
         return 0;
     }
+
     a->bi_func_pc = i;
 
-    if (c == '\n')
+    if (c == '\n') {
         a->error_pc = a->pc;
-    else if (dbio_scanf("%u\n", &a->error_pc) != 1) {
+    } else if (dbio_scanf("%u\n", &a->error_pc) != 1) {
         errlog("READ_ACTIV: no error pc.\n");
         return 0;
     }
+
     if (!check_pc_validity(a->prog, which_vector, a->pc)) {
         errlog("READ_ACTIV: Bad PC for suspended task.\n");
         return 0;
     }
+
     if (a->bi_func_pc != 0) {
         func_name = dbio_read_string();
-        if ((i = number_func_by_name(func_name)) == FUNC_NOT_FOUND) {
+        const auto result = number_func_by_name(func_name);
+
+        if (!result.has_value()) {
             errlog("READ_ACTIV: Unknown built-in function `%s'\n", func_name);
             return 0;
         }
+
+        i = *result;
         a->bi_func_id = i;
-        if (!read_bi_func_data(a->bi_func_id, &a->bi_func_data,
-                               &a->bi_func_pc)) {
-            errlog("READ_ACTIV: Bad saved state for built-in function `%s'\n",
-                   func_name);
+
+        if (!read_bi_func_data(a->bi_func_id, &a->bi_func_data, &a->bi_func_pc)) {
+            errlog("READ_ACTIV: Bad saved state for built-in function `%s'\n", func_name);
             return 0;
         }
     }
+
     return 1;
 }
 
