@@ -39,7 +39,7 @@
  * input to the log file.
  */
 
-/* #define LOG_EVALS */
+#define LOG_EVALS
 
 /******************************************************************************
  * Define ENABLE_GC to enable automatic garbage collection of cyclic data
@@ -389,7 +389,7 @@
  ******************************************************************************
  */
 
-/* #define PLAYER_HUH 1 */
+#define PLAYER_HUH 1
 
 /******************************************************************************
  * Configurable options for the Exec subsystem.  EXEC_SUBDIR is the
