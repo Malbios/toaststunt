@@ -1,4 +1,29 @@
 # ToastStunt ChangeLog
+## 2.7.3 (In Progress)
+### Bug Fixes
+- `listeners()` now uses the correct key for print-messages.
+- Threaded DNS lookups had an issue that made them freeze the server just as badly as non-threaded DNS lookups. This has been resolved. (See ToastCore for an example implementation of handling slow lookups without allowing a connection to process commands.)
+- `curl` and related functions are now disabled when outbound network connections are disabled.
+- Large amounts of input on TLS connections could cause it to fail to go through until the next command. This is now fixed.
+
+### New Features
+- `open_network_connection` now displays more helpful error messages in-MOO, particularly when catching errors in a try.
+- Outbound TLS connections now include the SNI.
+- PCRE improvements.
+
+## 2.7.2 (Jul 17, 2024)
+### Bug Fixes
+- Fix memory corruption in the signal handler.
+- Fix buffer overflow in telnet IAC capture.
+- Fix a memory leak when converting from objects to strings in SQLite.
+
+### New Features
+- Remove the `proxy_rewrite` server option. Instead, you can now add trusted proxy IP addresses to the `$server_options.trusted_proxies` property or the equivalent property on the listening object itself. Any connecting IP found in this list will have the login screen suppressed, and will accept forwarded IP addresses via the HAProxy Proxy protocol, at which point the welcome screen will be printed. To regain the legacy functionality, you can set `$server_options.trusted_proxies` to `{"127.0.0.1", "::1"}`
+- Add a fourth argument to `occupants()` to inverse the parent match.
+- Add a command line argument (`--no-ipv6`) to disable the initial IPv6 listener.
+
+### *** COMPATIBILITY WARNINGS ***
+- If you rely on the proxy rewriting behavior, note that it is **no longer** enabled by default. See the entry above about trusted proxies.
 
 ## 2.7.1 (Sep 17, 2023)
 ### Bug Fixes

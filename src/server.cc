@@ -398,7 +398,6 @@ handle_user_defined_signal(int sig)
     }
 
     free_var(result);
-    free_var(args);
 }
 
 static void
@@ -1575,13 +1574,27 @@ server_resume_input(Objid connection)
 }
 
 bool
-is_localhost(Objid connection)
+is_trusted_proxy(Objid connection)
 {
     shandle *existing_h = find_shandle(connection);
-    if (!existing_h)
+    Var proxies;
+
+    if (!existing_h) {
         return false;
-    else
-        return network_is_localhost(existing_h->nhandle);
+    } else if (!get_server_option(existing_h->listener, "trusted_proxies", &proxies) || proxies.type != TYPE_LIST) {
+        return false;
+    } else {
+        
+        int i;
+        const char *ip = network_ip_address(existing_h->nhandle);
+
+        for (i = 1; i <= proxies.v.list[0].v.num; i++) {
+            if (proxies.v.list[i].type == TYPE_STR && strcmp(ip, proxies.v.list[i].v.str) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 int
@@ -1896,6 +1909,7 @@ print_usage()
     fprintf(stderr, "\nNETWORKING OPTIONS\n");
     fprintf(stderr, "  %-20s %s\n", "-o, --outbound", "enable outbound network connections");
     fprintf(stderr, "  %-20s %s\n", "-O, --no-outbound", "disable outbound network connections");
+    fprintf(stderr, "  %-20s %s\n", "    --no-ipv6", "don't listen on IPv6 for default ports");
     fprintf(stderr, "  %-20s %s\n", "-4, --ipv4", "restrict IPv4 listeners to a specific address");
     fprintf(stderr, "  %-20s %s\n", "-6, --ipv6", "restrict IPv6 listeners to a specific address");
     fprintf(stderr, "  %-20s %s\n", "-r, --tls-cert", "TLS certificate to use");
@@ -1937,6 +1951,7 @@ main(int argc, char **argv)
     bool cmdline_key = false;
     bool cmdline_filedir = false;
     bool cmdline_execdir = false;
+    bool cmdline_noipv6 = false;
     //
 
     std::vector<uint16_t> initial_ports;
@@ -1957,6 +1972,7 @@ main(int argc, char **argv)
         {"clear-move",      no_argument,        nullptr,            'm'},
         {"outbound",        no_argument,        nullptr,            'o'},
         {"no-outbound",     no_argument,        nullptr,            'O'},
+        {"no-ipv6",         no_argument,        nullptr,            '3'},
         {"tls-port",        no_argument,        nullptr,            't'},
         {"ipv4",            required_argument,  nullptr,            '4'},
         {"ipv6",            required_argument,  nullptr,            '6'},
@@ -2033,6 +2049,12 @@ main(int argc, char **argv)
                 cmdline_outbound = true;
                 outbound_network_enabled = false;
 #endif
+            }
+            break;
+            
+            case '3':                   /* --no-ipv6; disable initial IPv6 listeners */
+            {
+                cmdline_noipv6 = true;
             }
             break;
 
@@ -2209,6 +2231,8 @@ main(int argc, char **argv)
     }
 
     applog(LOG_NOTICE, "NETWORK: Outbound network connections %s.\n", outbound_network_enabled ? "enabled" : "disabled");
+    if (cmdline_noipv6)
+        applog(LOG_INFO2, "CMDLINE: Not listening for IPv6 connections on default ports.\n");
     if (cmdline_ipv4)
         applog(LOG_INFO2, "CMDLINE: IPv4 source address restricted to: %s.\n", bind_ipv4);
     if (cmdline_ipv6)
@@ -2246,7 +2270,7 @@ main(int argc, char **argv)
         for (auto &the_port : *ports)
         {
             desc.v.num = the_port;
-            for (int ip_type = 0; ip_type < 2; ip_type++)
+            for (int ip_type = 0; ip_type < (cmdline_noipv6 ? 1 : 2); ip_type++)
             {
                 if ((new_listener = new_slistener(SYSTEM_OBJECT, desc, 1, nullptr, ip_type, nullptr TLS_PORT_TYPE TLS_CERT_PATH)) == nullptr)
                     errlog("Error creating %s%s listener on port %i.\n", port_type == PORT_TLS ? "TLS " : "", ip_type == PROTO_IPv6 ? "IPv6" : "IPv4", the_port);
@@ -2641,7 +2665,7 @@ bf_open_network_connection(Var arglist, Byte next, void *vdata, Objid progr)
     Options: ipv6 -> INT, listener -> OBJ, tls -> INT, tls_verify -> INT */
 
     Var r;
-    enum error e;
+    package e;
     server_listener sl;
     slistener l;
     bool use_ipv6 = false;
@@ -2707,7 +2731,7 @@ bf_open_network_connection(Var arglist, Byte next, void *vdata, Objid progr)
 
     e = network_open_connection(arglist, sl, use_ipv6 USE_TLS_BOOL);
     free_var(arglist);
-    if (e == E_NONE) {
+    if (e.u.raise.code.v.err == E_NONE) {
         /* The connection was successfully opened, implying that
          * server_new_connection was called, implying and a new negative
          * player number was allocated for the connection.  Thus, the old
@@ -2715,14 +2739,10 @@ bf_open_network_connection(Var arglist, Byte next, void *vdata, Objid progr)
          */
         r.type = TYPE_OBJ;
         r.v.obj = next_unconnected_player + 1;
-    } else {
-        r.type = TYPE_ERR;
-        r.v.err = e;
-    }
-    if (r.type == TYPE_ERR)
-        return make_error_pack(r.v.err);
-    else
         return make_var_pack(r);
+    } else {
+        return e;
+    }
 
 #else               /* !OUTBOUND_NETWORK */
 
@@ -2865,12 +2885,12 @@ name_lookup_callback(Var arglist, Var *ret, void *extra_data)
         /* If the server is shutting down, this is meaningless and creates
          * a bit of a mess anyway. So don't bother continuing. */
         if (!shutdown_triggered.load()) {
-        ret->type = TYPE_STR;
-        ret->v.str = name;
+            ret->type = TYPE_STR;
+            ret->v.str = name;
 
-        if (rewrite_connect_name && status == 0)
-            if (network_name_lookup_rewrite(who, name) != 0)
-                make_error_map(E_INVARG, "Failed to rewrite connection name.", ret);
+            if (rewrite_connect_name && status == 0)
+                if (network_name_lookup_rewrite(who, name, nh) != 0)
+                    make_error_map(E_INVARG, "Failed to rewrite connection name.", ret);
         }
     }
 }
@@ -3198,7 +3218,7 @@ bf_listeners(Var arglist, Byte next, void *vdata, Objid progr)
 // Save the keys for later
     static const Var object = str_dup_to_var("object");
     static const Var port = str_dup_to_var("port");
-    static const Var print = str_dup_to_var("print_messages");
+    static const Var print = str_dup_to_var("print-messages");
 
     for (l = all_slisteners; l; l = l->next) {
         if (!find_listener || equality(find, (find.type == TYPE_OBJ) ? Var::new_obj(l->oid) : l->desc, 0)) {
