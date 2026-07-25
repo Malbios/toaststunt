@@ -116,6 +116,13 @@ extern enum outcome do_server_program_task(Var _this, const char *verb,
 					   int do_db_tracebacks);
 extern enum outcome resume_from_previous_vm(vm the_vm, Var value);
 
+/* Queues a #0:handle_verb_programmed dispatch, fired after the current
+ * task's run() call returns (see execute.cc) rather than immediately -
+ * do_server_program_task resets top_activ_stack unconditionally, so
+ * calling it synchronously from mid-task (e.g. from bf_set_verb_code)
+ * would destroy the calling task's own activation stack. */
+extern void queue_verb_programmed(Var obj, const char *vname, Objid programmer);
+
 extern int task_timed_out;
 extern void abort_running_task(void);
 extern void print_error_backtrace(const char *, void (*)(const char *));

@@ -67,6 +67,28 @@ static Timer_ID task_alarm_id;
 static const char *handler_verb_name;   /* For in-DB traceback handling */
 static Var handler_verb_args;
 
+/* Pending #0:handle_verb_programmed events queued during the current task
+ * (by bf_set_verb_code / end_programming) and flushed after run() returns
+ * below, once the task's own activation stack is no longer in use. Firing
+ * these synchronously from mid-task would call do_server_program_task,
+ * which unconditionally resets top_activ_stack to 0 - destroying the
+ * calling task's own stack. Same deferred-dispatch idiom as
+ * handler_verb_name/handler_verb_args above, generalized to fire
+ * unconditionally (mirroring the handle_lagging_task dispatch further
+ * down) rather than only on an aborted outcome. */
+static Var pending_verb_programmed = new_list(0);
+
+void
+queue_verb_programmed(Var obj, const char *vname, Objid programmer)
+{
+    Var event = new_list(3);
+    event.v.list[1] = var_ref(obj);
+    event.v.list[2].type = TYPE_STR;
+    event.v.list[2].v.str = str_dup(vname);
+    event.v.list[3] = Var::new_obj(programmer);
+    pending_verb_programmed = listappend(pending_verb_programmed, event);
+}
+
 /* used when loading the database to hold values that may reference yet
    unloaded anonymous objects */
 static Var temp_vars = new_list(0);
@@ -3086,6 +3108,8 @@ run_interpreter(char raise, enum error e,
      * and this is the only place run() is called. */
     handler_verb_args = zero;
     handler_verb_name = nullptr;
+    free_var(pending_verb_programmed);
+    pending_verb_programmed = new_list(0);
 
     Objid object = RUN_ACTIV.vloc.v.obj;
     Objid progr = RUN_ACTIV.progr;
@@ -3145,6 +3169,22 @@ run_interpreter(char raise, enum error e,
             lag_info.v.list[2] = total_cputime;
             do_server_verb_task(Var::new_obj(SYSTEM_OBJECT), "handle_lagging_task", lag_info, handle, activ_stack[0].player, "", nullptr, 0);
         }
+    }
+
+    if (pending_verb_programmed.v.list[0].v.num > 0)
+    {
+        db_verb_handle vp_handle = db_find_callable_verb(Var::new_obj(SYSTEM_OBJECT), "handle_verb_programmed");
+        Var vp_events = pending_verb_programmed;
+        pending_verb_programmed = new_list(0);
+        if (vp_handle.ptr)
+        {
+            int vp_count = vp_events.v.list[0].v.num;
+            for (int vi = 1; vi <= vp_count; vi++)
+                do_server_verb_task(Var::new_obj(SYSTEM_OBJECT), "handle_verb_programmed",
+                                    var_ref(vp_events.v.list[vi]), vp_handle,
+                                    activ_stack[0].player, "", nullptr, 0);
+        }
+        free_var(vp_events);
     }
 
 #ifdef SAVE_FINISHED_TASKS

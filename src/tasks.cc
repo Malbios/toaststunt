@@ -726,6 +726,22 @@ end_programming(tqueue * tq)
 
             if (program) {
                 db_set_verb_program(h, program);
+
+                /* Unlike bf_set_verb_code (verbs.cc), end_programming is
+                 * called directly from the scheduler's main loop via
+                 * do_command_task - never from inside an active run()/
+                 * run_interpreter() call - so there's no enclosing task's
+                 * activation stack to clobber here. A direct dispatch is
+                 * safe; the deferred queue (see execute.cc) is only needed
+                 * where run_server_task would otherwise be called reentrantly
+                 * from mid-task. */
+                Var vp_args = new_list(3);
+                vp_args.v.list[1] = Var::new_obj(tq->program_object);
+                vp_args.v.list[2].type = TYPE_STR;
+                vp_args.v.list[2].v.str = str_dup(db_verb_names(h));
+                vp_args.v.list[3] = Var::new_obj(player);
+                run_server_task(player, Var::new_obj(SYSTEM_OBJECT), "handle_verb_programmed", vp_args, "", nullptr);
+
                 notify(player, "Verb programmed.");
             } else
                 notify(player, "Verb not programmed.");
