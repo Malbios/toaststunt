@@ -208,8 +208,14 @@
  * DEFAULT_TLS_KEY can be overridden with the command-line option --tls-key (-k)
  */
 
-#define USE_TLS
-#define VERIFY_TLS_PEERS
+// TLS disabled - this project's Sidecar only ever connects over plain TCP
+// telnet (see the project plan's "Sidecar privilege: Zero" decision), so
+// there's no TLS listener/client path to secure. Left enabled by default,
+// this just logs harmless "Failed to load default certificate/private key"
+// warnings at every startup since DEFAULT_TLS_CERT/KEY below point at a
+// production Let's Encrypt path that doesn't exist in a dev environment.
+// #define USE_TLS
+// #define VERIFY_TLS_PEERS
 #define DEFAULT_TLS_CERT    "/etc/letsencrypt/live/fullchain.pem"
 #define DEFAULT_TLS_KEY     "/etc/letsencrypt/live/privkey.pem"
 #define LOG_TLS_CONNECTIONS
