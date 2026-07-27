@@ -891,14 +891,20 @@ start_over:
 	if (c == '*') {
 	    for (;;) {
 		c = lex_getc();
-		if (c == '*') {
-		    c = lex_getc();
-		    if (c == '/')
-			goto start_over;
-		}
 		if (c == EOF) {
 		    yyerror("End of program while in a comment");
 		    return c;
+		}
+		if (c == '*') {
+		    do {
+			c = lex_getc();
+			if (c == '/')
+			    goto start_over;
+		    } while (c == '*');
+		    if (c == EOF) {
+			yyerror("End of program while in a comment");
+			return c;
+		    }
 		}
 	    }
 	} else {
