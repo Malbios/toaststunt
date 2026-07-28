@@ -1049,6 +1049,52 @@ bf_object_bytes(Var arglist, Byte next, void *vdata, Objid progr)
     }
 }
 
+/* Mirrors the source core's bf_area implementation almost verbatim:
+ * climbs `o`'s location chain (starting at `o` itself, in case `o` is an
+ * area object already) looking for the first ancestor that isa
+ * #0.area's value. #0.area is resolved once and cached, matching the
+ * source core's static g_area. */
+static package
+bf_area(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (object) */
+    static Objid g_area = NOTHING;
+
+    Var result;
+    result.type = TYPE_OBJ;
+
+    if (!valid(g_area))
+        g_area = NOTHING;
+
+    if (g_area == NOTHING) {
+        Var p;
+        if (valid(SYSTEM_OBJECT)
+            && db_find_property(Var::new_obj(SYSTEM_OBJECT), "area", &p).ptr
+            && (p.type == TYPE_OBJ) && valid(p.v.obj)
+        ) {
+            g_area = p.v.obj;
+        } else {
+            free_var(arglist);
+            result.v.obj = NOTHING;
+            return make_var_pack(result);
+        }
+    }
+
+    Objid o = arglist.v.list[1].v.obj;
+    Objid loc = o;
+
+    free_var(arglist);
+
+    while (valid(loc)) {
+        if (db_object_isa(Var::new_obj(loc), Var::new_obj(g_area))) {
+            result.v.obj = loc;
+            return make_var_pack(result);
+        }
+        loc = db_object_location(loc);
+    }
+    result.v.obj = NOTHING;
+    return make_var_pack(result);
+}
+
 static package
 bf_isa(Var arglist, Byte next, void *vdata, Objid progr)
 {   /* (object, parent, return_object) */
@@ -1369,6 +1415,7 @@ register_objects(void)
                                       bf_move_read, bf_move_write,
                                       TYPE_OBJ, TYPE_OBJ, TYPE_INT);
     register_function("isa", 2, 3, bf_isa, TYPE_ANY, TYPE_ANY, TYPE_INT);
+    register_function("area", 1, 1, bf_area, TYPE_OBJ);
     register_function("locate_by_name", 1, 2, bf_locate_by_name, TYPE_STR, TYPE_INT);
     register_function("occupants", 1, 4, bf_occupants, TYPE_LIST, TYPE_ANY, TYPE_INT, TYPE_INT);
     register_function("locations", 1, 3, bf_locations, TYPE_OBJ, TYPE_OBJ, TYPE_INT);
