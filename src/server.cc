@@ -126,6 +126,7 @@ const char *default_key_path = DEFAULT_TLS_KEY;
 
 int clear_last_move = false;
 int skip_db_validation = false;
+int force_binary_notify = false;
 char *bind_ipv4 = nullptr;
 char *bind_ipv6 = nullptr;
 char *file_subdir = FILE_SUBDIR;
@@ -1913,6 +1914,7 @@ print_usage()
     fprintf(stderr, "  %-20s %s\n", "-f, --start-script", "file to load and pass to `#0:do_start_script()'");
     fprintf(stderr, "  %-20s %s\n", "-c, --start-line", "line to pass to `#0:do_start_script()'");
     fprintf(stderr, "  %-20s %s\n", "--skip-validate", "skip the object-hierarchy validation pass on load (only safe against a db already known-good)");
+    fprintf(stderr, "  %-20s %s\n", "--force-binary-notify", "always decode ~XX binary-string escapes in notify() output, for every connection");
     fprintf(stderr, "\nDIRECTORY OPTIONS\n");
     fprintf(stderr, "  %-20s %s\n", "-i, --file-dir", "directory to look for files for use with FileIO functions");
     fprintf(stderr, "  %-20s %s\n", "-x, --exec-dir", "directory to look for executables for use with the exec() function");
@@ -1992,6 +1994,7 @@ main(int argc, char **argv)
         {"file-dir",        required_argument,  nullptr,            'i'},
         {"exec-dir",        required_argument,  nullptr,            'x'},
         {"skip-validate",   no_argument,        nullptr,            'S'},
+        {"force-binary-notify", no_argument,    nullptr,            'B'},
         {"help",            no_argument,        nullptr,            'h'},
         {nullptr,           0,                  nullptr,              0}
     };
@@ -2049,6 +2052,19 @@ main(int argc, char **argv)
                                           * object graph will now hang or crash on first
                                           * use instead of failing fast at startup. */
                 skip_db_validation = true;
+                break;
+
+            case 'B':                   /* --force-binary-notify; always decode ~XX
+                                          * binary-string escapes in notify() output,
+                                          * regardless of the per-connection "binary"
+                                          * option. Some other cores (this one
+                                          * included) hard-code this on for every
+                                          * connection at the engine level rather than
+                                          * ever toggling it from moocode - this flag
+                                          * reproduces that without changing the
+                                          * standard opt-in default for other databases
+                                          * built from this same binary. */
+                force_binary_notify = true;
                 break;
 
             case 'o':                   /* --outbound; enable outbound network connections */
@@ -2948,7 +2964,7 @@ bf_notify(Var arglist, Byte next, void *vdata, Objid progr)
     }
     r.type = TYPE_INT;
     if (h && !h->disconnect_me.load()) {
-        if (h->binary) {
+        if (h->binary || force_binary_notify) {
             int length;
 
             line = binary_to_raw_bytes(line, &length);
