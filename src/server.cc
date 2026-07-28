@@ -125,6 +125,7 @@ const char *default_key_path = DEFAULT_TLS_KEY;
 #endif
 
 int clear_last_move = false;
+int skip_db_validation = false;
 char *bind_ipv4 = nullptr;
 char *bind_ipv6 = nullptr;
 char *file_subdir = FILE_SUBDIR;
@@ -1911,6 +1912,7 @@ print_usage()
     fprintf(stderr, "  %-20s %s\n", "-w, --waif-type", "convert waifs from the specified type (check with typeof(waif) in your old MOO)");
     fprintf(stderr, "  %-20s %s\n", "-f, --start-script", "file to load and pass to `#0:do_start_script()'");
     fprintf(stderr, "  %-20s %s\n", "-c, --start-line", "line to pass to `#0:do_start_script()'");
+    fprintf(stderr, "  %-20s %s\n", "--skip-validate", "skip the object-hierarchy validation pass on load (only safe against a db already known-good)");
     fprintf(stderr, "\nDIRECTORY OPTIONS\n");
     fprintf(stderr, "  %-20s %s\n", "-i, --file-dir", "directory to look for files for use with FileIO functions");
     fprintf(stderr, "  %-20s %s\n", "-x, --exec-dir", "directory to look for executables for use with the exec() function");
@@ -1989,6 +1991,7 @@ main(int argc, char **argv)
         {"tls-key",         required_argument,  nullptr,            'k'},
         {"file-dir",        required_argument,  nullptr,            'i'},
         {"exec-dir",        required_argument,  nullptr,            'x'},
+        {"skip-validate",   no_argument,        nullptr,            'S'},
         {"help",            no_argument,        nullptr,            'h'},
         {nullptr,           0,                  nullptr,              0}
     };
@@ -2037,6 +2040,15 @@ main(int argc, char **argv)
 
             case 'm':                   /* --clear-move; clear all last_move properties and don't set new ones */
                 clear_last_move = true;
+                break;
+
+            case 'S':                   /* --skip-validate; skip the object-hierarchy
+                                          * validation pass on load. Only safe against a
+                                          * db file that just finished a clean, fully-
+                                          * validated boot - a genuinely broken/cyclic
+                                          * object graph will now hang or crash on first
+                                          * use instead of failing fast at startup. */
+                skip_db_validation = true;
                 break;
 
             case 'o':                   /* --outbound; enable outbound network connections */
