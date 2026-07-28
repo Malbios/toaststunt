@@ -2972,6 +2972,30 @@ bf_notify(Var arglist, Byte next, void *vdata, Objid progr)
                 free_var(arglist);
                 return make_error_pack(E_INVARG);
             }
+            if (force_binary_notify && !h->binary) {
+                /* The source core's own binary_to_raw_bytes() always
+                 * appends a trailing "\r\n" before returning - a
+                 * notify()-output-specific behavior baked into the
+                 * shared decode function there. ToastStunt's decoder is
+                 * kept general-purpose (also used for
+                 * base64/crypto/exec/fileio, where an auto-appended CRLF
+                 * would corrupt the data), so replicate the line
+                 * terminator here instead - scoped to only the forced
+                 * path, so genuine/native binary-mode notify() (a real
+                 * per-connection opt-in, if anything else ever sets it)
+                 * keeps ToastStunt's original, un-terminated behavior. */
+                static Stream *terminated = nullptr;
+                if (!terminated)
+                    terminated = new_stream(100);
+                else
+                    reset_stream(terminated);
+                for (int i = 0; i < length; i++)
+                    stream_add_char(terminated, line[i]);
+                stream_add_char(terminated, '\r');
+                stream_add_char(terminated, '\n');
+                length = stream_length(terminated);
+                line = reset_stream(terminated);
+            }
             r.v.num = network_send_bytes(h->nhandle, line, length, !no_flush);
         } else
             r.v.num = network_send_line(h->nhandle, line, !no_flush, !no_newline);
