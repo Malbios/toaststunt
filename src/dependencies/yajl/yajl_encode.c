@@ -38,6 +38,8 @@
 #include <stdio.h>
 #include <ctype.h>
 
+static void charToHex(unsigned char c, char * hexBuf);
+
 void
 yajl_string_encode(yajl_buf buf, const unsigned char * str,
                    unsigned int len)
@@ -98,6 +100,31 @@ yajl_string_encode2(const yajl_print_t print,
             beg = ++end;
         } else if (str[end] == '\\') {
             const char * escaped = "\\\\";
+            print(ctx, (const char *) (str + beg), end - beg);
+            print(ctx, escaped, (unsigned int)strlen(escaped));
+            beg = ++end;
+        } else if (str[end] < 0x20) {
+            /* A raw control byte, as opposed to one already spelled out via
+             * the "~XX" binary-string marker convention handled above (e.g.
+             * MOO verb source can contain a literal ESC byte typed directly
+             * into a string literal - MOOcode has no escape syntax for
+             * control characters at all). Left unescaped, this produces
+             * invalid JSON. Escaped the same way as the "~XX" branch above
+             * for the same codepoint, unconditionally - unlike that branch,
+             * this isn't gated on disable_binary_escapes, since a raw
+             * control byte must always be escaped for valid JSON regardless
+             * of that flag. */
+            const char * escaped = NULL;
+            switch (str[end]) {
+                case '\b': escaped = "\\b"; break;
+                case '\f': escaped = "\\f"; break;
+                case '\n': escaped = "\\n"; break;
+                case '\r': escaped = "\\r"; break;
+                default:
+                    charToHex(str[end], hexBuf + 4);
+                    escaped = hexBuf;
+                    break;
+            }
             print(ctx, (const char *) (str + beg), end - beg);
             print(ctx, escaped, (unsigned int)strlen(escaped));
             beg = ++end;
