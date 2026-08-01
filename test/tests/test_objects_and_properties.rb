@@ -73,6 +73,15 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     [:anonymous, 1]
   ]
 
+  # add_property()/delete_property()/set_property_info() now always fail
+  # with E_TYPE when called directly on an anonymous object (commit
+  # a47da4d, "Don't allow adding verbs / properties to anonymous
+  # objects."), before any of the validity/permission/name checks a given
+  # test below is otherwise exercising even run. Tests that call one of
+  # these three directly on a SCENARIOS object branch on
+  # `args[0] == :anonymous` to assert E_TYPE instead of their original,
+  # now-impossible-for-anonymous-objects scenario.
+
   ## add_property
 
   def test_that_add_property_works_on_objects
@@ -80,11 +89,15 @@ class TestObjectsAndProperties < Test::Unit::TestCase
       run_test_as('programmer') do
         o = create(*args)
         r = add_property(o, 'foobar', 0, ['player', ''])
-        assert_not_equal E_TYPE, r
-        assert_not_equal E_INVARG, r
-        assert_not_equal E_PERM, r
-        assert_equal 'abc', set(o, 'foobar', 'abc')
-        assert_equal 'abc', get(o, 'foobar')
+        if args[0] == :anonymous
+          assert_equal E_TYPE, r
+        else
+          assert_not_equal E_TYPE, r
+          assert_not_equal E_INVARG, r
+          assert_not_equal E_PERM, r
+          assert_equal 'abc', set(o, 'foobar', 'abc')
+          assert_equal 'abc', get(o, 'foobar')
+        end
       end
     end
   end
@@ -112,7 +125,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
       run_test_as('programmer') do
         o = create(*args)
         recycle(o)
-        assert_equal E_INVARG, add_property(o, 'foobar', 0, ['player', ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_INVARG
+        assert_equal expected, add_property(o, 'foobar', 0, ['player', ''])
       end
     end
   end
@@ -121,7 +135,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
-        assert_equal E_INVARG, add_property(o, 'name', 0, ['player', ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_INVARG
+        assert_equal expected, add_property(o, 'name', 0, ['player', ''])
       end
     end
   end
@@ -132,7 +147,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
         o = simplify(command(%Q|; return create($nothing);|))
         add_property(o, 'foobar', 123, ['player', ''])
         p = create(o, args[1])
-        assert_equal E_INVARG, add_property(p, 'foobar', 0, ['player', ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_INVARG
+        assert_equal expected, add_property(p, 'foobar', 0, ['player', ''])
       end
     end
   end
@@ -156,7 +172,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
         set(o, 'w', 0)
       end
       run_test_as('programmer') do
-        assert_equal E_PERM, add_property(o, 'foobar', 0, ['player', ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_PERM
+        assert_equal expected, add_property(o, 'foobar', 0, ['player', ''])
       end
     end
   end
@@ -191,7 +208,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
-        assert_equal E_PERM, add_property(o, 'foobar', 0, [:system, ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_PERM
+        assert_equal expected, add_property(o, 'foobar', 0, [:system, ''])
       end
     end
   end
@@ -222,10 +240,14 @@ class TestObjectsAndProperties < Test::Unit::TestCase
         o = create(*args)
         add_property(o, 'foobar', 0, ['player', ''])
         r = delete_property(o, 'foobar')
-        assert_not_equal E_TYPE, r
-        assert_not_equal E_INVARG, r
-        assert_not_equal E_PERM, r
-        assert_not_equal E_PROPNF, r
+        if args[0] == :anonymous
+          assert_equal E_TYPE, r
+        else
+          assert_not_equal E_TYPE, r
+          assert_not_equal E_INVARG, r
+          assert_not_equal E_PERM, r
+          assert_not_equal E_PROPNF, r
+        end
       end
     end
   end
@@ -235,7 +257,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
       run_test_as('programmer') do
         o = create(*args)
         recycle(o)
-        assert_equal E_INVARG, delete_property(o, 'foobar')
+        expected = args[0] == :anonymous ? E_TYPE : E_INVARG
+        assert_equal expected, delete_property(o, 'foobar')
       end
     end
   end
@@ -244,7 +267,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
-        assert_equal E_PROPNF, delete_property(o, 'foobar')
+        expected = args[0] == :anonymous ? E_TYPE : E_PROPNF
+        assert_equal expected, delete_property(o, 'foobar')
       end
     end
   end
@@ -253,7 +277,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
-        assert_equal E_PROPNF, delete_property(o, 'name')
+        expected = args[0] == :anonymous ? E_TYPE : E_PROPNF
+        assert_equal expected, delete_property(o, 'name')
       end
     end
   end
@@ -267,7 +292,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
         set(o, 'w', 0)
       end
       run_test_as('programmer') do
-        assert_equal E_PERM, delete_property(o, 'foobar')
+        expected = args[0] == :anonymous ? E_TYPE : E_PERM
+        assert_equal expected, delete_property(o, 'foobar')
       end
     end
   end
@@ -343,12 +369,19 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     end
   end
 
+  # An anonymous object can never be a property's definer (add_property()
+  # on one always fails), so that half of this scenario just confirms
+  # the failure instead.
   def test_that_is_clear_property_returns_false_if_called_on_the_definer
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
-        add_property(o, 'foobar', 0, ['player', ''])
-        assert_equal 0, is_clear_property(o, 'foobar')
+        r = add_property(o, 'foobar', 0, ['player', ''])
+        if args[0] == :anonymous
+          assert_equal E_TYPE, r
+        else
+          assert_equal 0, is_clear_property(o, 'foobar')
+        end
       end
     end
   end
@@ -445,12 +478,19 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     end
   end
 
+  # An anonymous object can never be a property's definer (add_property()
+  # on one always fails), so that half of this scenario just confirms
+  # the failure instead.
   def test_that_clear_property_raises_an_error_if_called_on_the_definer
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
-        add_property(o, 'foobar', 0, ['player', ''])
-        assert_equal E_INVARG, clear_property(o, 'foobar')
+        r = add_property(o, 'foobar', 0, ['player', ''])
+        if args[0] == :anonymous
+          assert_equal E_TYPE, r
+        else
+          assert_equal E_INVARG, clear_property(o, 'foobar')
+        end
       end
     end
   end
@@ -499,11 +539,17 @@ class TestObjectsAndProperties < Test::Unit::TestCase
 
   ## property_info
 
+  # add_property() always fails on an anonymous object directly, so this
+  # (and the read-permission test below) define the property on a real
+  # parent and query it through an anonymous child instead --
+  # property_info() itself is still permissive of anonymous objects, so
+  # this still exercises the intended behavior.
   def test_that_property_info_works_on_objects
     SCENARIOS.each do |args|
       run_test_as('programmer') do
-        o = create(*args)
-        add_property(o, 'foobar', 0, [player, 'rw'])
+        parent = simplify(command(%Q|; return create($nothing);|))
+        o = create(parent, args[1])
+        add_property(parent, 'foobar', 0, [player, 'rw'])
         assert_equal [player, 'rw'], property_info(o, 'foobar')
       end
     end
@@ -541,8 +587,9 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     SCENARIOS.each do |args|
       o = nil
       run_test_as('programmer') do
-        o = create(*args)
-        add_property(o, 'foobar', 0, ['player', ''])
+        parent = simplify(command(%Q|; return create($nothing);|))
+        o = create(parent, args[1])
+        add_property(parent, 'foobar', 0, ['player', ''])
       end
       run_test_as('programmer') do
         assert_equal E_PERM, property_info(o, 'foobar')
@@ -578,13 +625,21 @@ class TestObjectsAndProperties < Test::Unit::TestCase
 
   ## set_property_info
 
+  # set_property_info() checks obj.is_obj() before anything else --
+  # including before looking up the property at all -- so it always
+  # fails with E_TYPE against an anonymous object regardless of what a
+  # given test below is otherwise exercising.
   def test_that_set_property_info_works_on_objects
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
         add_property(o, 'foobar', 0, [player, 'rw'])
-        set_property_info(o, 'foobar', [player, 'c'])
-        assert_equal [player, 'c'], property_info(o, 'foobar')
+        r = set_property_info(o, 'foobar', [player, 'c'])
+        if args[0] == :anonymous
+          assert_equal E_TYPE, r
+        else
+          assert_equal [player, 'c'], property_info(o, 'foobar')
+        end
       end
     end
   end
@@ -594,7 +649,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
       run_test_as('programmer') do
         o = create(*args)
         recycle(o)
-        assert_equal E_INVARG, set_property_info(o, 'foobar', [player, ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_INVARG
+        assert_equal expected, set_property_info(o, 'foobar', [player, ''])
       end
     end
   end
@@ -603,7 +659,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
-        assert_equal E_PROPNF, set_property_info(o, 'foobar', [player, ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_PROPNF
+        assert_equal expected, set_property_info(o, 'foobar', [player, ''])
       end
     end
   end
@@ -612,7 +669,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
-        assert_equal E_PROPNF, set_property_info(o, 'name', [player, ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_PROPNF
+        assert_equal expected, set_property_info(o, 'name', [player, ''])
       end
     end
   end
@@ -625,7 +683,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
         add_property(o, 'foobar', 0, ['player', ''])
       end
       run_test_as('programmer') do
-        assert_equal E_PERM, set_property_info(o, 'foobar', [player, ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_PERM
+        assert_equal expected, set_property_info(o, 'foobar', [player, ''])
       end
     end
   end
@@ -638,7 +697,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
         add_property(o, 'foobar', 0, ['player', 'w'])
       end
       run_test_as('programmer') do
-        assert_equal E_PERM, set_property_info(o, 'foobar', [player, ''])
+        expected = args[0] == :anonymous ? E_TYPE : E_PERM
+        assert_equal expected, set_property_info(o, 'foobar', [player, ''])
       end
     end
   end
@@ -658,13 +718,22 @@ class TestObjectsAndProperties < Test::Unit::TestCase
 
   ## properties
 
+  # Unlike property_info()/get()/set(), properties() only lists propdefs
+  # defined directly on the object itself, not inherited ones -- so
+  # there's no way to make it return anything but [] for an anonymous
+  # object, since add_property() can never define one there.
   def test_that_properties_works_on_objects
     SCENARIOS.each do |args|
       run_test_as('programmer') do
         o = create(*args)
         assert_equal [], properties(o)
-        add_property(o, 'foobar', 0, [player, 'rw'])
-        assert_equal 'foobar', properties(o)
+        r = add_property(o, 'foobar', 0, [player, 'rw'])
+        if args[0] == :anonymous
+          assert_equal E_TYPE, r
+          assert_equal [], properties(o)
+        else
+          assert_equal 'foobar', properties(o)
+        end
       end
     end
   end
@@ -720,6 +789,10 @@ class TestObjectsAndProperties < Test::Unit::TestCase
 
   def test_that_properties_and_inheritance_work
     SCENARIOS.each do |args|
+      # delete_property() always fails with E_TYPE on an anonymous
+      # object (m/n below), regardless of whether the property being
+      # deleted is actually inherited (E_PROPNF).
+      delete_property_expected = args[0] == :anonymous ? E_TYPE : E_PROPNF
       run_test_as('wizard') do
         e = create(NOTHING)
         b = create(NOTHING)
@@ -858,8 +931,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
         assert_equal 'c', get(m, 'c')
         assert_equal 'c', get(n, 'c')
 
-        assert_equal E_PROPNF, delete_property(m, 'e')
-        assert_equal E_PROPNF, delete_property(n, 'e')
+        assert_equal delete_property_expected, delete_property(m, 'e')
+        assert_equal delete_property_expected, delete_property(n, 'e')
 
         chparent(m, NOTHING)
         chparent(n, NOTHING)
@@ -1018,8 +1091,8 @@ class TestObjectsAndProperties < Test::Unit::TestCase
         assert_equal location, get(m, 'c')
         assert_equal location, get(n, 'c')
 
-        assert_equal E_PROPNF, delete_property(m, 'e')
-        assert_equal E_PROPNF, delete_property(n, 'e')
+        assert_equal delete_property_expected, delete_property(m, 'e')
+        assert_equal delete_property_expected, delete_property(n, 'e')
 
         chparent(m, NOTHING)
         chparent(n, NOTHING)
