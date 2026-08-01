@@ -10,6 +10,7 @@
 - Fixed the build against Nettle 4.0, which dropped the length argument from its `*_digest` functions.
 
 ### New Features
+- Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.
 - Add an optional unclean_shutdown parameter to `shutdown()`, which replicates the functionality found in the `panic()` builtin.
 - Remove the `panic()` builtin.
 - Anonymous children are no longer invalidated when properties change on their parents.
