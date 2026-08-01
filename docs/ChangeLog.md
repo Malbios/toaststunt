@@ -20,6 +20,7 @@
 - JSON null values now map to E_NONE instead of the string "null" when parsing JSON.
 - Allow empty subjects in pcre_match.
 - Add an optional third argument to generate_json to disable binary string escaping.
+- Add a `waifs([class])` builtin that returns all currently-live waif instances, optionally filtered to a single class. Wizards see every matching waif; non-wizards only see waifs they own.
 
 ## 2.7.3 (Jun 20, 2025)
 ### Bug Fixes

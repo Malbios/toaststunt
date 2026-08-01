@@ -323,6 +323,54 @@ class TestWaif < Test::Unit::TestCase
     end
   end
 
+  def waifs_count(cls)
+    simplify(command(%Q|; return length(waifs(#{cls}));|))
+  end
+
+  def test_that_waifs_filters_by_class
+    run_test_as('wizard') do
+      a = create(:waif)
+      b = create(:waif)
+      add_property(player, 'stash', {}, [player, ''])
+      assert_equal 0, waifs_count(a)
+      assert_equal 0, waifs_count(b)
+      simplify(command(%Q|; player.stash["a1"] = #{a}:new(); player.stash["a2"] = #{a}:new(); player.stash["b1"] = #{b}:new(); return 1;|))
+      assert_equal 2, waifs_count(a)
+      assert_equal 1, waifs_count(b)
+      simplify(command(%Q|; player.stash = 0; return 1;|))
+    end
+  end
+
+  def test_that_waifs_shows_only_owned_waifs_to_non_wizards
+    a = owner = nil
+    run_test_as('programmer') do
+      a = create(:waif)
+      owner = player
+      set(a, 'r', 1)
+      add_property(player, 'stash', {}, [player, ''])
+      simplify(command(%Q|; player.stash["w"] = #{a}:new(); return 1;|))
+      assert_equal 1, waifs_count(a)
+    end
+    run_test_as('programmer') do
+      assert_equal 0, waifs_count(a)
+    end
+    run_test_as('wizard') do
+      assert_equal 1, waifs_count(a)
+      simplify(command(%Q|; #{owner}.stash = 0; return 1;|))
+    end
+  end
+
+  def test_that_waifs_no_longer_shows_a_recycled_waif
+    run_test_as('wizard') do
+      a = create(:waif)
+      add_property(player, 'stash', {}, [player, ''])
+      simplify(command(%Q|; player.stash["w"] = #{a}:new(); return 1;|))
+      assert_equal 1, waifs_count(a)
+      simplify(command(%Q|; player.stash["w"] = 0; return 1;|))
+      assert_equal 0, waifs_count(a)
+    end
+  end
+
   def test_setting_and_getting_nested_waif_map_indexes
     run_test_as('programmer') do
       # Create a waif class with a map property
