@@ -18,21 +18,32 @@ class TestCannedDbs < Test::Unit::TestCase
 
   private
 
+  # NOTE: each `wait.value` below runs *after* the corresponding stream is
+  # fully drained via readlines, not before. Waiting on the child first
+  # (the original order here) is a classic Open3 deadlock: if the child
+  # writes enough output to fill the pipe's OS buffer before exiting, it
+  # blocks on its own write() while we block on wait.value, and neither
+  # side ever proceeds. readlines blocking until EOF (i.e. until the child
+  # closes the pipe, which happens at or before exit) gives the same
+  # synchronization safely.
   def diff(first, second)
     _, diff, _, wait = Open3.popen3 %[diff #{first} #{second}]
+    lines = diff.readlines.map(&:chomp)
     wait.value
 
-    diff.readlines.map(&:chomp)
+    lines
   end
 
   def log_and_diff(original, backup)
     _, _, log, wait = Open3.popen3 %[./moo #{original} #{backup} 9899]
+    log_lines = log.readlines.map(&:chomp)
     wait.value
 
     _, diff, _, wait = Open3.popen3 %[diff #{original} #{backup}]
+    diff_lines = diff.readlines.map(&:chomp)
     wait.value
 
-    [log.readlines.map(&:chomp), diff.readlines.map(&:chomp)]
+    [log_lines, diff_lines]
   end
 
   public
