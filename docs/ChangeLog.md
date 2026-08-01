@@ -9,6 +9,7 @@
 - Fixed generate_json mangling strings with ~0 or ~1 followed by non-hex characters.
 - Fixed the build against Nettle 4.0, which dropped the length argument from its `*_digest` functions.
 - `sqlite_execute()` now reports an error instead of silently returning a truncated result if a query fails partway through iterating its rows (previously only a failure on the very first row was detected).
+- `set_property_info()` now rejects (E_INVARG) renaming a waif-scoped property (e.g. `:foo`) to a non-waif-scoped name (e.g. `foo`) if any live waif instance of the affected class holds a non-clear value for it. This used to succeed silently while discarding every such instance's value, since a regular property has one shared, definer-owned value with no room for the many independent per-instance values a waif-scoped property can hold. Renaming in the other direction (promoting a regular property to waif scope) is unaffected and remains safe.
 
 ### New Features
 - Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.

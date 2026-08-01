@@ -267,6 +267,38 @@ db_rename_propdef(Var obj, const char *old, const char *_new)
                 if (h.ptr || property_defined_at_or_below(_new, str_hash(_new), o))
                     return 0;
             }
+
+            /* Renaming a waif-scoped property (":foo") away from waif
+             * scope ("foo") collapses what may be many independent
+             * per-waif-instance values into a single shared, definer-
+             * owned regular property -- there's no way to losslessly
+             * preserve more than one of them. Refuse rather than
+             * silently discard live data. (The other direction, non-
+             * waif to waif-scoped, is safe: a newly waif-scoped slot
+             * correctly falls back to the definer's current value, see
+             * waif_get_prop().) A single flat db_descendants() call is
+             * used here (rather than mirroring the recursive walk just
+             * below) because it already returns the complete transitive
+             * descendant set in one pass; the recursion below is
+             * pre-existing and out of scope to fix.
+             */
+            if (props->l[i].name[0] == WAIF_PROP_PREFIX && _new[0] != WAIF_PROP_PREFIX) {
+                Var descendant, descendants = db_descendants(obj, true);
+                int di, dc = 0;
+                bool would_destroy_data = false;
+
+                FOR_EACH(descendant, descendants, di, dc) {
+                    if (waif_class_holds_live_value(descendant.v.obj, props->l[i].name)) {
+                        would_destroy_data = true;
+                        break;
+                    }
+                }
+                free_var(descendants);
+
+                if (would_destroy_data)
+                    return 0;
+            }
+
             rename_waif_prop_recursively(obj, props->l[i].name, _new);
             free_str(props->l[i].name);
             props->l[i].name = str_ref(_new);
