@@ -3,6 +3,9 @@
 
 #include <sqlite3.h>
 #include <atomic>
+#include <mutex>
+#include <string>
+#include <unordered_map>
 
 #include "structures.h"
 
@@ -20,6 +23,12 @@ typedef struct sqlite_conn
     char *path;
     unsigned char options;
     std::atomic_uint locks;
+    /* Prepared statements are cached per-connection, keyed by the exact
+     * query text, to avoid re-preparing the same statement on every
+     * sqlite_execute() call. Guards concurrent execute() calls against
+     * this same connection reusing the same cached sqlite3_stmt at once. */
+    std::unordered_map<std::string, sqlite3_stmt *> stmt_cache;
+    std::mutex stmt_cache_mutex;
 } sqlite_conn;
 
 /* In order to ensure thread safety, the last result should be unique

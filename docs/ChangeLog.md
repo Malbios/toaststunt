@@ -8,9 +8,11 @@
 - Fixed crash when PCRE substring extraction fails.
 - Fixed generate_json mangling strings with ~0 or ~1 followed by non-hex characters.
 - Fixed the build against Nettle 4.0, which dropped the length argument from its `*_digest` functions.
+- `sqlite_execute()` now reports an error instead of silently returning a truncated result if a query fails partway through iterating its rows (previously only a failure on the very first row was detected).
 
 ### New Features
 - Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.
+- `sqlite_execute()` now caches and reuses prepared statements per connection instead of re-preparing the same query text on every call.
 - Add an optional unclean_shutdown parameter to `shutdown()`, which replicates the functionality found in the `panic()` builtin.
 - Remove the `panic()` builtin.
 - Anonymous children are no longer invalidated when properties change on their parents.
