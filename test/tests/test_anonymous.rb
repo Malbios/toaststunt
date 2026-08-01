@@ -263,23 +263,25 @@ class TestAnonymous < Test::Unit::TestCase
     end
   end
 
-  def test_that_renumbering_a_parent_invalidates_an_anonymous_object
-    run_test_as('wizard') do
-      o = create(:nothing)
-      add_verb(o, ['player', 'xd', 'go'], ['this', 'none', 'this'])
-      set_verb_code(o, 'go') do |vc|
-        vc << %Q|recycle(create($nothing));|
-        vc << %Q|recycle(create($nothing));|
-        vc << %Q|a = create($nothing);|
-        vc << %Q|add_property(a, "xyz", 1, {player, ""});|
-        vc << %Q|m = create(a, 1);|
-        vc << %Q|renumber(a);|
-        vc << %Q|return m.xyz;|
-      end
-      assert_equal E_INVIND, call(o, 'go')
-    end
-  end
+  # NOTE: renumbering a parent used to be expected to invalidate its
+  # anonymous children (asserting E_INVIND here). That's no longer correct:
+  # db_renumber_object() (src/db_objects.cc) deliberately fixes up anonymous
+  # children's parent references to the new object number. See
+  # test_that_renumbering_a_parent_does_not_invalidate_an_anonymous_object
+  # near the end of this file for a test of the current, intentional
+  # behavior.
 
+  # KNOWN UNRESOLVED ISSUE (not fixed here): this test currently gets
+  # E_PROPNF instead of the expected E_INVIND. Sequence: `a` is recycled,
+  # reset_max_object() frees its slot, and `b` is created reusing that same
+  # object number with a different "xyz" value; `m` (an anonymous child
+  # created under the original `a`) is expected to become invalid rather
+  # than reading `b`'s property. It doesn't silently read `b`'s value
+  # (E_PROPNF, not "2"), so there's no data corruption, but the exact
+  # error code doesn't match this test's expectation and the root cause
+  # (why m.xyz raises E_PROPNF rather than E_INVIND after the parent's
+  # object number is reused) hasn't been tracked down. Left failing
+  # rather than guessed at.
   def test_that_replacing_a_parent_does_not_corrupt_an_anonymous_object
     run_test_as('wizard') do
       o = create(:nothing)
@@ -382,25 +384,37 @@ class TestAnonymous < Test::Unit::TestCase
       end
   end
 
+  # NOTE on the tests below (this comment applies to every test in this file
+  # that follows this shape): verbs can no longer be added directly to an
+  # anonymous object (commit a47da4d, "Don't allow adding verbs /
+  # properties to anonymous objects. This was already documented as not
+  # being possible. Now it's enforced."). Each test below now defines its
+  # verbs on a throwaway *parent* object and creates the anonymous instance
+  # `o` as a child of it, so `o` inherits them normally. `this` inside the
+  # verb code is still the anonymous instance `o` when called through it
+  # (inheritance doesn't change `this`), so this preserves every test's
+  # original intent unchanged.
+
   def test_that_callers_returns_valid_anonymous_objects_for_wizards
     run_test_as('wizard') do
       add_property(player, 'stash', {}, [player, ''])
+      parent = create(:nothing)
 
-      o = simplify(command(%Q|; player.stash["o"] = create($anonymous, 1); return "player.stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|return callers();|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|c = this:b();|
         vc << %Q|return {{c[1][2], valid(c[1][1]), valid(c[1][4])}, {c[2][2], valid(c[2][1]), valid(c[2][4])}};|
       end
+
+      o = simplify(command(%Q|; player.stash["o"] = create(#{parent}, 1); return "player.stash[\\\"o\\\"]";|))
 
       assert_equal [["b", 1, 1], ["c", 1, 1]], call(o, 'c')
     end
@@ -409,22 +423,23 @@ class TestAnonymous < Test::Unit::TestCase
   def test_that_callers_returns_valid_anonymous_objects_for_owners
     run_test_as('programmer') do
       add_property(player, 'stash', {}, [player, ''])
+      parent = create(:nothing)
 
-      o = simplify(command(%Q|; player.stash["o"] = create($anonymous, 1); return "player.stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|return callers();|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|c = this:b();|
         vc << %Q|return {{c[1][2], valid(c[1][1]), valid(c[1][4])}, {c[2][2], valid(c[2][1]), valid(c[2][4])}};|
       end
+
+      o = simplify(command(%Q|; player.stash["o"] = create(#{parent}, 1); return "player.stash[\\\"o\\\"]";|))
 
       assert_equal [["b", 1, 1], ["c", 1, 1]], call(o, 'c')
     end
@@ -432,48 +447,53 @@ class TestAnonymous < Test::Unit::TestCase
 
   def test_that_callers_returns_invalid_anonymous_objects_for_everyone_else
     o = nil
+    parent = nil
     run_test_as('wizard') do
       add_property(player, 'stash', {}, [player, 'r'])
+      parent = create(:nothing)
+      set(parent, 'w', 1)
 
-      o = simplify(command(%Q|; o = player.stash["o"] = create($anonymous, 1); o.r = o.w = 1; return tostr(player) + ".stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|set_task_perms(player);|
         vc << %Q|return callers();|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
+
+      o = simplify(command(%Q|; o = player.stash["o"] = create(#{parent}, 1); o.r = o.w = 1; return tostr(player) + ".stash[\\\"o\\\"]";|))
     end
     run_test_as('programmer') do
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|c = this:b();|
         vc << %Q|return {{c[1][2], valid(c[1][1]), valid(c[1][4])}, {c[2][2], valid(c[2][1]), valid(c[2][4])}};|
       end
 
-      assert_equal [["b", 0, 0], ["c", 0, 0]], call(o, 'c')
+      # index [4] is verb-loc (see comment on the error-stack-trace test
+      # below): always valid now that verbs live on the regular `parent`
+      # object rather than the anonymous instance itself.
+      assert_equal [["b", 0, 1], ["c", 0, 1]], call(o, 'c')
     end
   end
 
   def test_that_task_stack_returns_valid_anonymous_objects_for_wizards
     run_test_as('wizard') do
       add_property(player, 'stash', {}, [player, ''])
+      parent = create(:nothing)
 
-      o = simplify(command(%Q|; player.stash["o"] = create($anonymous, 1); return "player.stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|suspend();|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|fork t (0)|
         vc << %Q|c = this:b();|
         vc << %Q|endfork|
@@ -481,6 +501,8 @@ class TestAnonymous < Test::Unit::TestCase
         vc << %Q|t = task_stack(t);|
         vc << %Q|return {{t[1][2], valid(t[1][1]), valid(t[1][4])}, {t[2][2], valid(t[2][1]), valid(t[2][4])}, {t[3][2], valid(t[3][1]), valid(t[3][4])}};|
       end
+
+      o = simplify(command(%Q|; player.stash["o"] = create(#{parent}, 1); return "player.stash[\\\"o\\\"]";|))
 
       assert_equal [["a", 1, 1], ["b", 1, 1], ["c", 1, 1]], call(o, 'c')
     end
@@ -489,19 +511,18 @@ class TestAnonymous < Test::Unit::TestCase
   def test_that_task_stack_returns_valid_anonymous_objects_for_owners
     run_test_as('programmer') do
       add_property(player, 'stash', {}, [player, ''])
+      parent = create(:nothing)
 
-      o = simplify(command(%Q|; player.stash["o"] = create($anonymous, 1); return "player.stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|suspend();|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|fork t (0)|
         vc << %Q|c = this:b();|
         vc << %Q|endfork|
@@ -509,6 +530,8 @@ class TestAnonymous < Test::Unit::TestCase
         vc << %Q|t = task_stack(t);|
         vc << %Q|return {{t[1][2], valid(t[1][1]), valid(t[1][4])}, {t[2][2], valid(t[2][1]), valid(t[2][4])}, {t[3][2], valid(t[3][1]), valid(t[3][4])}};|
       end
+
+      o = simplify(command(%Q|; player.stash["o"] = create(#{parent}, 1); return "player.stash[\\\"o\\\"]";|))
 
       assert_equal [["a", 1, 1], ["b", 1, 1], ["c", 1, 1]], call(o, 'c')
     end
@@ -516,24 +539,27 @@ class TestAnonymous < Test::Unit::TestCase
 
   def test_that_task_stack_returns_valid_anonymous_objects_for_everyone_else
     o = nil
+    parent = nil
     run_test_as('wizard') do
       add_property(player, 'stash', {}, [player, 'r'])
+      parent = create(:nothing)
+      set(parent, 'w', 1)
 
-      o = simplify(command(%Q|; o = player.stash["o"] = create($anonymous, 1); o.r = o.w = 1; return tostr(player) + ".stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|set_task_perms(player);|
         vc << %Q|suspend();|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
+
+      o = simplify(command(%Q|; o = player.stash["o"] = create(#{parent}, 1); o.r = o.w = 1; return tostr(player) + ".stash[\\\"o\\\"]";|))
     end
     run_test_as('programmer') do
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|fork t (0)|
         vc << %Q|c = this:b();|
         vc << %Q|endfork|
@@ -542,26 +568,27 @@ class TestAnonymous < Test::Unit::TestCase
         vc << %Q|return {{t[1][2], valid(t[1][1]), valid(t[1][4])}, {t[2][2], valid(t[2][1]), valid(t[2][4])}, {t[3][2], valid(t[3][1]), valid(t[3][4])}};|
       end
 
-      assert_equal [["a", 0, 0], ["b", 0, 0], ["c", 0, 0]], call(o, 'c')
+      # index [4] is verb-loc: always valid now that verbs live on the
+      # regular `parent` object rather than the anonymous instance itself.
+      assert_equal [["a", 0, 1], ["b", 0, 1], ["c", 0, 1]], call(o, 'c')
     end
   end
 
   def test_that_queued_tasks_returns_valid_anonymous_objects_for_wizards
     run_test_as('wizard') do
       add_property(player, 'stash', {}, [player, ''])
+      parent = create(:nothing)
 
-      o = simplify(command(%Q|; player.stash["o"] = create($anonymous, 1); return "player.stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|suspend();|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|for t in ({0, 100})|
         vc << %Q|fork (t)|
         vc << %Q|c = this:b();|
@@ -571,6 +598,8 @@ class TestAnonymous < Test::Unit::TestCase
         vc << %Q|q = queued_tasks();|
         vc << %Q|return {length(q), {q[1][7], valid(q[1][6]), valid(q[1][9])}, {q[2][7], valid(q[2][6]), valid(q[2][9])}};|
       end
+
+      o = simplify(command(%Q|; player.stash["o"] = create(#{parent}, 1); return "player.stash[\\\"o\\\"]";|))
 
       assert_equal [2, ["c", 1, 1], ["a", 1, 1]], call(o, 'c')
     end
@@ -579,19 +608,18 @@ class TestAnonymous < Test::Unit::TestCase
   def test_that_queued_tasks_returns_valid_anonymous_objects_for_programmers
     run_test_as('programmer') do
       add_property(player, 'stash', {}, [player, ''])
+      parent = create(:nothing)
 
-      o = simplify(command(%Q|; player.stash["o"] = create($anonymous, 1); return "player.stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|suspend();|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|for t in ({0, 100})|
         vc << %Q|fork (t)|
         vc << %Q|c = this:b();|
@@ -602,29 +630,34 @@ class TestAnonymous < Test::Unit::TestCase
         vc << %Q|return {length(q), {q[1][7], valid(q[1][6]), valid(q[1][9])}, {q[2][7], valid(q[2][6]), valid(q[2][9])}};|
       end
 
+      o = simplify(command(%Q|; player.stash["o"] = create(#{parent}, 1); return "player.stash[\\\"o\\\"]";|))
+
       assert_equal [2, ["c", 1, 1], ["a", 1, 1]], call(o, 'c')
     end
   end
 
   def test_that_queued_tasks_returns_invalid_anonymous_objects_for_everyone_else
     o = nil
+    parent = nil
     run_test_as('wizard') do
       add_property(player, 'stash', {}, [player, 'r'])
+      parent = create(:nothing)
+      set(parent, 'w', 1)
 
-      o = simplify(command(%Q|; o = player.stash["o"] = create($anonymous, 1); o.r = o.w = 1; return tostr(player) + ".stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|suspend();|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
+
+      o = simplify(command(%Q|; o = player.stash["o"] = create(#{parent}, 1); o.r = o.w = 1; return tostr(player) + ".stash[\\\"o\\\"]";|))
     end
     run_test_as('programmer') do
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|for t in ({0, 100})|
         vc << %Q|fork (t)|
         vc << %Q|c = this:b();|
@@ -635,26 +668,29 @@ class TestAnonymous < Test::Unit::TestCase
         vc << %Q|return {length(q), {q[1][7], valid(q[1][6]), valid(q[1][9])}};|
       end
 
-      assert_equal [1, ["c", 0, 0]], call(o, 'c')
+      # index [6] here is queued_tasks()'s equivalent of verb-loc: always
+      # valid now that verbs live on the regular `parent` object rather
+      # than the anonymous instance itself.
+      assert_equal [1, ["c", 1, 0]], call(o, 'c')
     end
   end
 
   def test_that_an_error_stack_trace_contains_invalid_anonymous_objects_for_everyone
     run_test_as('wizard') do
       add_property(player, 'stash', {}, [player, 'r'])
+      parent = create(:nothing)
+      set(parent, 'w', 1)
 
-      o = simplify(command(%Q|; o = player.stash["o"] = create($anonymous, 1); o.r = o.w = 1; return tostr(player) + ".stash[\\\"o\\\"]";|))
-
-      add_verb(o, ['player', 'xd', 'a'], ['this', 'none', 'this'])
-      set_verb_code(o, 'a') do |vc|
+      add_verb(parent, ['player', 'xd', 'a'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'a') do |vc|
         vc << %Q|1/0;|
       end
-      add_verb(o, ['player', 'xd', 'b'], ['this', 'none', 'this'])
-      set_verb_code(o, 'b') do |vc|
+      add_verb(parent, ['player', 'xd', 'b'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'b') do |vc|
         vc << %Q|return this:a();|
       end
-      add_verb(o, ['player', 'xd', 'c'], ['this', 'none', 'this'])
-      set_verb_code(o, 'c') do |vc|
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
         vc << %Q|try;|
         vc << %Q|this:b();|
         vc << %Q|except ex (ANY);|
@@ -662,7 +698,40 @@ class TestAnonymous < Test::Unit::TestCase
         vc << %Q|return {{ex[4][1][2], valid(ex[4][1][1]), valid(ex[4][1][4])}, {ex[4][2][2], valid(ex[4][2][1]), valid(ex[4][2][4])}};|
       end
 
-      assert_equal [["a", 0, 0], ["b", 0, 0]], call(o, 'c')
+      o = simplify(command(%Q|; o = player.stash["o"] = create(#{parent}, 1); o.r = o.w = 1; return tostr(player) + ".stash[\\\"o\\\"]";|))
+
+      # Frame index [4] is verb-loc (the object the verb is actually
+      # defined on), not `this`. Since verbs now live on the regular
+      # `parent` object rather than the anonymous instance itself, verb-loc
+      # is always a valid object here regardless of the anonymous
+      # instance's validity -- only index [1] (`this`) tracks that.
+      assert_equal [["a", 0, 1], ["b", 0, 1]], call(o, 'c')
+    end
+  end
+
+  # Regression test for the renumber-does-not-invalidate-anonymous-children
+  # behavior in db_renumber_object() (src/db_objects.cc): when a parent is
+  # renumbered, its anonymous children's parent references are explicitly
+  # fixed up to point at the new number rather than being left dangling.
+  # This replaces a test that asserted the opposite (E_INVIND after
+  # renumbering), which no longer matches the server's intentional
+  # behavior -- see the sibling chparents/add_property/delete_property
+  # "does not invalidate" tests above for the same pattern with other
+  # structural changes.
+  def test_that_renumbering_a_parent_does_not_invalidate_an_anonymous_object
+    run_test_as('wizard') do
+      o = create(:nothing)
+      add_verb(o, ['player', 'xd', 'go'], ['this', 'none', 'this'])
+      set_verb_code(o, 'go') do |vc|
+        vc << %Q|recycle(create($nothing));|
+        vc << %Q|recycle(create($nothing));|
+        vc << %Q|a = create($nothing);|
+        vc << %Q|add_property(a, "xyz", 1, {player, ""});|
+        vc << %Q|m = create(a, 1);|
+        vc << %Q|renumber(a);|
+        vc << %Q|return m.xyz;|
+      end
+      assert_equal 1, call(o, 'go')
     end
   end
 
