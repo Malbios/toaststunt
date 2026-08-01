@@ -262,6 +262,28 @@ class TestLimits < Test::Unit::TestCase
     end
   end
 
+  # Regression test for upstream issue #94: the SVO_MAX_MAP_VALUE_BYTES
+  # option-table entry was wired to the "max_list_value_bytes" property,
+  # so max_map_value_bytes had no effect of its own. Every other map-limit
+  # test above uses set_max_value_bytes, which sets both properties to the
+  # same value and so can't distinguish the two; this test tightens only
+  # the map limit and checks it's actually honored independently.
+  def test_that_max_map_value_bytes_is_independent_of_max_list_value_bytes
+    run_test_as('wizard') do
+      [90, 250, 1000].each do |n|
+        n += rand(-10..10)
+        set_max_value_bytes(1000000)
+        size = simplify(command("; x = []; for i in [1..#{n}]; x[1] = {x}; endfor; return value_bytes(x);"))
+        evaluate("$server_options.max_map_value_bytes = #{size + 1};")
+        evaluate('load_server_options();')
+        assert_equal size, simplify(command("; x = []; for i in [1..#{n}]; x[1] = {x}; endfor; return value_bytes(x);"))
+        assert_equal E_QUOTA, simplify(command("; x = []; for i in [1..#{n + 1}]; x[1] = {x}; endfor; return value_bytes(x);"))
+        # building an equally large list must be unaffected by the tight map-only limit
+        assert_not_equal E_QUOTA, simplify(command("; x = {}; for i in [1..#{n + 1}]; x = {x}; endfor; return value_bytes(x);"))
+      end
+    end
+  end
+
   def test_that_rangeset_on_a_map_checks_map_max_value_bytes
     run_test_as('wizard') do
       [90, 250, 1000].each do |n|

@@ -2,6 +2,22 @@ require 'test_helper'
 
 class Testrecycle < Test::Unit::TestCase
 
+  # Regression test for upstream issue #96: next_recycled_object() looped
+  # with an exclusive upper bound while recycled_objects()/recreate() treat
+  # it as inclusive, so the highest-numbered recycled object was never
+  # reported. Recycling the object that is currently max_object() and
+  # asking next_recycled_object() to resume from exactly that id is what
+  # exercises the off-by-one.
+  def test_that_next_recycled_object_reports_the_highest_recycled_object
+    run_test_as('wizard') do
+      b = create(:object, 0)
+      assert_equal b, max_object()
+      recycle(b)
+      assert_equal false, valid(b)
+      assert_equal b, evaluate("next_recycled_object(#{b})")
+    end
+  end
+
   def test_that_the_first_argument_is_required
     run_test_as('programmer') do
       assert_equal E_ARGS, simplify(command("; recycle();"))
