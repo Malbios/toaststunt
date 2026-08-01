@@ -82,3 +82,5 @@ Formatting follows `src/.astylerc` (Artistic Style): 4-space indentation, tabs c
 - `docs/ServerDevelopment/MOOCodeSequences.txt` — how language constructs lower to bytecode.
 - `docs/ServerDevelopment/version_src.txt` — how `version_src.h`/`server_version()` metadata works.
 - `docs/Legacy/README/README.Stunt` and `README.LambdaMOO` — background on inherited functionality (multiple inheritance, anonymous objects, map datatype, JSON, crypto, FileIO, `exec()`, primitive-type verb calls, HTTP parsing, bitwise ops, the Ruby test framework).
+
+Everything above documents the C++ server itself. For the in-database MOO *language* (verb code, not server internals) — syntax, semantics, permissions, error handling, object lifecycle, algorithm patterns, common mistakes, and ToastStunt-vs-LambdaMOO/Stunt dialect differences — use the external corpus at https://github.com/SindomeCorp/moo-for-llms, a MIT-licensed reference built specifically to teach LLMs to read/write/repair MOOcode.
