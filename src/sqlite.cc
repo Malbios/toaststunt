@@ -109,7 +109,10 @@ static int allocate_handle()
 
     next_sqlite_handle++;
 
-    sqlite_conn *connection = (sqlite_conn*)malloc(sizeof(sqlite_conn));
+    /* sqlite_conn now holds a std::mutex/std::unordered_map (the statement
+     * cache), so it needs its constructor to actually run -- plain
+     * malloc() would leave those members in an invalid state. */
+    sqlite_conn *connection = new sqlite_conn;
     connection->path = nullptr;
     connection->options = SQLITE_PARSE_TYPES | SQLITE_PARSE_OBJECTS;
     connection->locks = 0;
@@ -119,16 +122,28 @@ static int allocate_handle()
     return handle;
 }
 
+/* Finalize and drop every cached prepared statement for a connection.
+ * Must happen before sqlite3_close(), which fails (SQLITE_BUSY) while any
+ * prepared statement on the connection remains unfinalized. */
+static void clear_statement_cache(sqlite_conn *conn)
+{
+    std::lock_guard<std::mutex> lock(conn->stmt_cache_mutex);
+    for (auto &entry : conn->stmt_cache)
+        sqlite3_finalize(entry.second);
+    conn->stmt_cache.clear();
+}
+
 /* Free up memory and remove a handle from the connection map. */
 static void deallocate_handle(int handle, bool shutdown)
 {
     sqlite_conn *conn = sqlite_connections[handle];
 
+    clear_statement_cache(conn);
     sqlite3_close(conn->id);
     if (conn->path != nullptr)
         free_str(conn->path);
     if (!shutdown) {
-        free(conn);
+        delete conn;
         sqlite_connections.erase(handle);
     }
 
@@ -370,15 +385,26 @@ static void sqlite_execute_thread_callback(Var args, Var *r, void *extra_data)
 {
     sqlite_conn *handle = (sqlite_conn*)extra_data;
     const char *query = args.v.list[2].v.str;
-    sqlite3_stmt *stmt;
 
-    int rc = sqlite3_prepare_v2(handle->id, query, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK)
+    std::lock_guard<std::mutex> cache_lock(handle->stmt_cache_mutex);
+
+    sqlite3_stmt *stmt = nullptr;
+    auto cached = handle->stmt_cache.find(query);
+    if (cached != handle->stmt_cache.end())
     {
-        const char *err = sqlite3_errmsg(handle->id);
-        r->type = TYPE_STR;
-        r->v.str = str_dup(err);
-        return;
+        stmt = cached->second;
+    }
+    else
+    {
+        int rc = sqlite3_prepare_v2(handle->id, query, -1, &stmt, nullptr);
+        if (rc != SQLITE_OK)
+        {
+            const char *err = sqlite3_errmsg(handle->id);
+            r->type = TYPE_STR;
+            r->v.str = str_dup(err);
+            return;
+        }
+        handle->stmt_cache[query] = stmt;
     }
 
     /* Take args[3] and bind it into the appropriate locations for SQLite
@@ -406,8 +432,7 @@ static void sqlite_execute_thread_callback(Var args, Var *r, void *extra_data)
         }
     }
 
-    rc = sqlite3_step(stmt);
-	/* TODO: Error checking will work if it fails on the first step, but extra handling should be implemented to cope with multiple steps */
+    int rc = sqlite3_step(stmt);
 	bool ok = (rc == SQLITE_OK || rc == SQLITE_DONE || rc == SQLITE_ROW);
 	if (!ok) {
 		const char *err = sqlite3_errmsg(handle->id);
@@ -444,17 +469,30 @@ static void sqlite_execute_thread_callback(Var args, Var *r, void *extra_data)
 			*r = listappend(*r, row);
 			rc = sqlite3_step(stmt);
 		}
+
+		/* A failure on a step() past the first one used to be
+		 * indistinguishable from normal completion (both simply end the
+		 * SQLITE_ROW loop above), silently turning a mid-iteration error
+		 * into a truncated, apparently-successful result. */
+		if (rc != SQLITE_DONE) {
+			const char *err = sqlite3_errmsg(handle->id);
+			free_var(*r);
+			r->type = TYPE_STR;
+			r->v.str = str_dup(err);
+		}
 	}
 
-    /* TODO: Reset the prepared statement bindings and cache it.
-     *       (Remove finalize when that happens) */
-    sqlite3_finalize(stmt);
+    /* Reset (rather than finalize) so the prepared statement stays valid
+     * in handle->stmt_cache for reuse by the next call with this query. */
+    sqlite3_reset(stmt);
+    sqlite3_clear_bindings(stmt);
 }
 
-/* Creates and executes a prepared statement.
+/* Creates and executes a prepared statement. The prepared statement is
+ * cached per-connection (keyed by the exact query text) and reused on
+ * subsequent calls instead of being re-prepared from scratch.
  * Args: INT <database handle>, STR <SQL query>, LIST <values>
- * e.g. sqlite_execute(0, 'INSERT INTO test VALUES (?, ?);', {5, #5})
- * TODO: Cache prepared statements? */
+ * e.g. sqlite_execute(0, 'INSERT INTO test VALUES (?, ?);', {5, #5}) */
 static package
 bf_sqlite_execute(Var arglist, Byte next, void *vdata, Objid progr)
 {
