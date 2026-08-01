@@ -34,6 +34,7 @@
 #include <fstream>
 #include <vector>
 #include <mutex>
+#include <unordered_map>
 #include <getopt.h>
 #include <sys/types.h>      /* must be first on some systems */
 #include <signal.h>
@@ -147,6 +148,26 @@ typedef struct shandle {
 static shandle *all_shandles = nullptr;
 std::recursive_mutex all_shandles_mutex;
 
+/* Index of all_shandles by player, for O(1) find_shandle() lookups.
+ * The linked list above remains authoritative for enumeration (shutdown,
+ * broadcast, listing); this is purely a lookup accelerator and must be kept
+ * in sync wherever a handle is inserted, freed, or has ->player reassigned.
+ * During a redirect (player_connected/player_switched), two handles can
+ * briefly share the same player id; the map is not required to track both
+ * in that instant, only to end up pointing at the surviving handle. */
+static std::unordered_map<Objid, shandle *> all_shandles_by_player;
+
+/* Remove h's entry from all_shandles_by_player, but only if it's still the
+ * one recorded for `player` -- it may already have been overwritten by a
+ * newer handle claiming the same player id (see player_connected/switched). */
+static void
+unmap_shandle(Objid player, shandle *h)
+{
+    auto it = all_shandles_by_player.find(player);
+    if (it != all_shandles_by_player.end() && it->second == h)
+        all_shandles_by_player.erase(it);
+}
+
 typedef struct slistener {
     Var desc;
     struct slistener *next, **prev;
@@ -191,6 +212,7 @@ free_shandle(shandle * h)
     *(h->prev) = h->next;
     if (h->next)
         h->next->prev = h->prev;
+    unmap_shandle(h->player, h);
     all_shandles_mutex.unlock();
 
     free_task_queue(h->tasks);
@@ -933,15 +955,10 @@ main_loop(void)
 static shandle *
 find_shandle(Objid player)
 {
-    shandle *h;
-
     std::lock_guard<std::recursive_mutex> lock(all_shandles_mutex);
 
-    for (h = all_shandles; h; h = h->next)
-        if (h->player == player)
-            return h;
-
-    return nullptr;
+    auto it = all_shandles_by_player.find(player);
+    return it != all_shandles_by_player.end() ? it->second : nullptr;
 }
 
 static char *cmdline_buffer;
@@ -1470,6 +1487,7 @@ server_new_connection(server_listener sl, network_handle nh, bool outbound)
     h->connection_time = 0;
     h->last_activity_time = time(nullptr);
     h->player = next_unconnected_player--;
+    all_shandles_by_player[h->player] = h;
     h->switched = 0;
     h->listener = l ? l->oid : SYSTEM_OBJECT;
     h->tasks = new_task_queue(h->player, h->listener);
@@ -1663,7 +1681,11 @@ player_connected(Objid old_id, Objid new_id, bool is_newly_created)
     if (!new_h)
         panic_moo("Non-existent shandle connected");
 
+    all_shandles_mutex.lock();
+    unmap_shandle(old_id, new_h);
     new_h->player = new_id;
+    all_shandles_by_player[new_id] = new_h;
+    all_shandles_mutex.unlock();
     new_h->connection_time = time(nullptr);
 
     if (existing_h) {
@@ -1736,7 +1758,11 @@ player_switched(Objid old_id, Objid new_id, bool silent)
         panic_moo("Non-existent shandle connected");
 
     new_h->switched = old_id;
+    all_shandles_mutex.lock();
+    unmap_shandle(old_id, new_h);
     new_h->player = new_id;
+    all_shandles_by_player[new_id] = new_h;
+    all_shandles_mutex.unlock();
     new_h->connection_time = time(nullptr);
 
     if (existing_h) {
