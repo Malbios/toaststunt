@@ -1167,8 +1167,7 @@ flush_input(tqueue * tq, int show_messages)
             notify(tq->player, ">> Flushing the following pending input:");
             s = new_stream(100);
         }
-        while ((t = dequeue_input_task(tq, DQ_FIRST)) != nullptr) {
-            /* TODO*** flush only non-TASK_OOB tasks ??? */
+        while ((t = dequeue_input_task(tq, DQ_INBAND)) != nullptr) {
             if (show_messages) {
                 stream_printf(s, ">>     %s", t->t.input.string);
                 notify(tq->player, reset_stream(s));
