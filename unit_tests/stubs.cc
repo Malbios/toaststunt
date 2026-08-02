@@ -54,6 +54,13 @@ Var clear = make_clear_var();
 
 // --- map.h: no test here constructs a TYPE_MAP Var, so these are
 // never actually reached at runtime, only linked. ---
+static Var make_emptymap_var() {
+    Var v;
+    v.type = TYPE_MAP;
+    v.v.tree = nullptr;
+    return v;
+}
+Var emptymap = make_emptymap_var();
 void destroy_map(Var) {}
 Var map_dup(Var map) { return map; }
 const rbnode *maplookup(Var, Var, Var *, int) { return nullptr; }
