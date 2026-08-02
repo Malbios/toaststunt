@@ -33,6 +33,7 @@
 - Add a `listremove_all(list, value [, case-matters])` function that removes every occurrence of `value` from `list`, unlike `setremove()` which only removes the first.
 - Add a `verb_callable(obj, verb-name)` function that returns true if `obj:verb-name(...)` would successfully dispatch (searching ancestors and requiring the verb's `x` bit), unlike `verb_info()`/`verb_args()` which only look at the object passed in.
 - Add a `pad(str, width [, char] [, side])` function that pads a string to a target width with a fill character (default space), on the left, right (default), or both sides for centering.
+- Compiling a verb (via `.program` or `set_verb_code()`) now warns, without blocking the save, when an assignment is used as the condition of `if`/`elseif`/`while` (e.g. `if (x = 1)`, a classic typo for `==`), and when an inline catch expression (`` `expr ! ANY => default' ``) uses a bare `ANY` that swallows every error rather than listing specific codes.
 
 ## 2.7.3 (Jun 20, 2025)
 ### Bug Fixes
