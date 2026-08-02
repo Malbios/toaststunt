@@ -192,6 +192,40 @@ dbpriv_append_anon_list(Objid root, Var *ret, std::unordered_set<Object*> *seen)
     }
 }
 
+/* Collects live anonymous object instances into a TYPE_ANON list, optionally
+ * restricted to one direct parent, and filtered to `progr's own instances
+ * unless `show_all' (wizard) is set. Backs the `anons()' builtin.
+ */
+Var
+dbpriv_anons(Objid parent, bool filter_parent, Objid progr, bool show_all)
+{
+    Var ret = new_list(0);
+    std::unordered_set<Object*> seen;
+
+    auto collect = [&](Object *x) {
+        if (seen.find(x) != seen.end())
+            return;
+        seen.insert(x);
+        if (show_all || dbpriv_object_owner(x) == progr) {
+            Var anon = Var::new_anon(x);
+            ret = listappend(ret, var_ref(anon));
+        }
+    };
+
+    if (filter_parent) {
+        auto it = anonymous_objects.find(parent);
+        if (it != anonymous_objects.end())
+            for (Object *x : it->second)
+                collect(x);
+    } else {
+        for (const auto &bucket : anonymous_objects)
+            for (Object *x : bucket.second)
+                collect(x);
+    }
+
+    return ret;
+}
+
 void
 dbpriv_destroy_anon_map()
 {

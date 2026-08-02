@@ -161,6 +161,13 @@ extern void dbpriv_append_anon_list(Objid root, Var *ret, std::unordered_set<Obj
                  * adding to descendant lists.)
                  */
 
+extern Var dbpriv_anons(Objid parent, bool filter_parent, Objid progr, bool show_all);
+                /* Return a TYPE_ANON list of live anonymous object
+                 * instances, optionally restricted to one direct
+                 * parent, filtered by ownership unless show_all.
+                 * Backs the `anons()' builtin.
+                 */
+
 extern void dbpriv_destroy_anon_map();
                 /* Free everything in the anonymous object map. */
 
