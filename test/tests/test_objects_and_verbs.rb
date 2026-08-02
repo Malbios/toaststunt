@@ -942,6 +942,83 @@ class TestObjectsAndVerbs < Test::Unit::TestCase
     end
   end
 
+  ## verb_callable
+
+  # verb_callable() is a thin wrapper around the same db_find_callable_verb()
+  # search respond_to() already uses -- ancestor-aware, and requiring the
+  # verb's `x' bit -- but returns a bare 0/1 with no permission gate at all
+  # (unlike respond_to(), which gates the {definer, name} detail behind
+  # object-read permission). That's intentional: a boolean "would this
+  # dispatch succeed" leaks nothing beyond what trial-and-error calling
+  # already would.
+
+  def test_that_verb_callable_fails_if_the_object_is_not_valid
+    SCENARIOS.each do |args|
+      run_test_as('programmer') do
+        o = create(*args)
+        recycle(o)
+        assert_equal E_INVARG, simplify(command(%Q|; return verb_callable(#{obj_ref(o)}, "foobar");|))
+      end
+    end
+  end
+
+  def test_that_verb_callable_rejects_a_non_object_argument
+    run_test_as('programmer') do
+      assert_equal E_TYPE, simplify(command('; return verb_callable(5, "foobar");'))
+    end
+  end
+
+  def test_that_verb_callable_returns_false_if_the_verb_does_not_exist
+    SCENARIOS.each do |args|
+      run_test_as('programmer') do
+        o = create(*args)
+        assert_equal 0, simplify(command(%Q|; return verb_callable(#{obj_ref(o)}, "foobar");|))
+      end
+    end
+  end
+
+  def test_that_verb_callable_returns_true_for_a_verb_defined_directly_on_the_object
+    SCENARIOS.each do |args|
+      run_test_as('programmer') do
+        o = create(*args)
+        if args[0] == :anonymous
+          definer = simplify(command(%Q|; return create($nothing);|))
+          o = create(definer, args[1])
+        else
+          definer = o
+        end
+        add_verb(definer, ['player', 'x', 'foo'], ['none', 'none', 'none'])
+        assert_equal 1, simplify(command(%Q|; return verb_callable(#{obj_ref(o)}, "foo");|))
+      end
+    end
+  end
+
+  def test_that_verb_callable_returns_true_for_an_inherited_verb
+    run_test_as('programmer') do
+      parent = create(NOTHING)
+      child = create(parent)
+      add_verb(parent, ['player', 'x', 'foo'], ['none', 'none', 'none'])
+      assert_equal 1, simplify(command(%Q|; return verb_callable(#{obj_ref(child)}, "foo");|))
+    end
+  end
+
+  def test_that_verb_callable_returns_false_for_a_verb_without_the_x_bit
+    run_test_as('programmer') do
+      o = create(NOTHING)
+      add_verb(o, ['player', 'r', 'foo'], ['none', 'none', 'none'])
+      assert_equal 0, simplify(command(%Q|; return verb_callable(#{obj_ref(o)}, "foo");|))
+    end
+  end
+
+  def test_that_verb_callable_ignores_object_read_permission
+    run_test_as('programmer') do
+      o = create(NOTHING)
+      set(o, 'r', 0)
+      add_verb(o, ['player', 'x', 'foo'], ['none', 'none', 'none'])
+      assert_equal 1, simplify(command(%Q|; return verb_callable(#{obj_ref(o)}, "foo");|))
+    end
+  end
+
   ## disassemble
 
   # Like verb_info()/verb_code(), disassemble() only finds verbs defined

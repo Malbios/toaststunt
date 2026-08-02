@@ -27,6 +27,7 @@
 - The trailing semicolon on the last statement in a block (an expression, `break`, `continue`, or `return`) is now optional when immediately followed by a block-closing keyword (`endif`, `endfor`, `endwhile`, `endfork`, `endtry`, `else`, `elseif`, `except`, `finally`) or the end of the program.
 - Add a `listget(list, index [, default])` function to safely index a list, returning a default value (or 0) instead of raising E_RANGE when the index is out of bounds.
 - Add `+` and `-` operators for maps: `map + map` merges two maps with the right-hand side winning on key collision, `map - map` returns a copy of the left map with the right map's keys removed.
+- Add a `verb_callable(obj, verb-name)` function that returns true if `obj:verb-name(...)` would successfully dispatch (searching ancestors and requiring the verb's `x` bit), unlike `verb_info()`/`verb_args()` which only look at the object passed in.
 
 ## 2.7.3 (Jun 20, 2025)
 ### Bug Fixes
