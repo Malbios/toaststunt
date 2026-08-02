@@ -29,6 +29,7 @@
 
 #include "structures.h"
 
+extern Var emptymap; /* Bandaid: See map.cc */
 extern Var new_map(void);
 extern void destroy_map(Var map);
 extern Var map_dup(Var map);

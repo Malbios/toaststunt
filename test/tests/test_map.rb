@@ -201,4 +201,36 @@ class TestMap < Test::Unit::TestCase
     end
   end
 
+  # Regression tests for a bandaid mirroring the one already applied to the
+  # empty list (see the comment at the top of src/list.cc): the empty map
+  # singleton had no protection at all against being freed or mutated in
+  # place if its refcount ever happened to be exactly right, unlike the
+  # empty list. These can't deterministically force that exact refcount
+  # condition (the same reason the original bug was hard to find at all),
+  # but they verify a fresh `[]` is never affected by unrelated code
+  # inserting into, deleting from, or discarding another `[]`.
+
+  def test_that_inserting_into_one_fresh_empty_map_does_not_affect_another
+    run_test_as('programmer') do
+      simplify(command(%Q|; x = []; x["k"] = "v"; return 1;|))
+      assert_equal({}, simplify(command(%Q|; return [];|)))
+      assert_equal 0, simplify(command(%Q|; return length([]);|))
+    end
+  end
+
+  def test_that_deleting_from_one_fresh_empty_map_does_not_affect_another
+    run_test_as('programmer') do
+      simplify(command(%Q|; x = []; mapdelete(x, "nonexistent-key"); return 1;|))
+      assert_equal({}, simplify(command(%Q|; return [];|)))
+    end
+  end
+
+  def test_that_discarding_a_fresh_empty_map_does_not_affect_another
+    run_test_as('programmer') do
+      simplify(command(%Q|; for i in [1..20]; x = []; endfor; return 1;|))
+      assert_equal({}, simplify(command(%Q|; return [];|)))
+      assert_equal 0, simplify(command(%Q|; return length([]);|))
+    end
+  end
+
 end
