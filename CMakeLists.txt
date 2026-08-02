@@ -8,6 +8,7 @@ project(ToastStunt VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_RELEASE} 
 # Compile Options
 option(ONLY_32_BITS "Use 32-bit integers instead of 64-bit." OFF)
 option(USE_JEMALLOC "Use jemalloc (if available) for memory allocation." OFF)
+option(BUILD_UNIT_TESTS "Build the Catch2 C++ unit test suite (moo_unit_tests)." ON)
 
 # Fall back to 32-bit mode if the target doesn't support 64-bit
 if( CMAKE_SIZEOF_VOID_P EQUAL 4 )
@@ -318,6 +319,47 @@ target_link_libraries(moo -lm ${EXTRA_LINKER_FLAGS})
 
 if(NOT APPLE)
     target_link_libraries(moo -lcrypt)
+endif()
+
+# --- Unit tests (Catch2, vendored - see unit_tests/vendor/catch2) ----------
+# A second, independent executable that links directly against a handful of
+# the server's own pure/near-pure source files (no DB/network/VM startup),
+# rather than the whole moo target - there's no reusable object library to
+# link against instead (moo is one flat add_executable()), so these sources
+# are compiled a second time here. Kept minimal deliberately: grow
+# UNIT_TEST_SERVER_SOURCES/target_link_libraries only in response to a real
+# undefined-reference error, not by guessing the full transitive closure
+# upfront.
+if(BUILD_UNIT_TESTS)
+    set(UNIT_TEST_SOURCES
+        unit_tests/vendor/catch2/catch_amalgamated.cpp
+        unit_tests/stubs.cc
+        unit_tests/test_verbcasecmp.cc
+        unit_tests/test_utils.cc
+        unit_tests/test_numbers.cc
+        unit_tests/test_list.cc
+        unit_tests/test_collection.cc
+        unit_tests/test_str_intern.cc)
+
+    set(UNIT_TEST_SERVER_SOURCES
+        src/utils.cc
+        src/numbers.cc
+        src/list.cc
+        src/collection.cc
+        src/str_intern.cc
+        src/storage.cc
+        src/log.cc
+        src/streams.cc)
+
+    add_executable(moo_unit_tests ${UNIT_TEST_SOURCES} ${UNIT_TEST_SERVER_SOURCES})
+    target_include_directories(moo_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/unit_tests/vendor/catch2)
+    target_link_libraries(moo_unit_tests ${NETTLE_LIBRARIES} ${ARGON2_LIBRARIES} -lm)
+    if(NOT APPLE)
+        target_link_libraries(moo_unit_tests -lcrypt)
+    endif()
+
+    enable_testing()
+    add_test(NAME unit_tests COMMAND moo_unit_tests)
 endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")

@@ -3858,10 +3858,15 @@ bf_task_stack(Var arglist, Byte next, void *vdata, Objid progr)
 void
 register_execute(void)
 {
-    register_function_with_read_write("call_function", 1, -1, bf_call_function,
+    unsigned func_id;
+
+    func_id = register_function_with_read_write("call_function", 1, -1, bf_call_function,
                                       bf_call_function_read,
                                       bf_call_function_write,
                                       TYPE_STR);
+    /* call_function may dispatch to another builtin (e.g. pass) that needs the VR variables. */
+    set_bi_function_requires_bi_variables(func_id, 1);
+
     register_function("raise", 1, 3, bf_raise, TYPE_ANY, TYPE_STR, TYPE_ANY);
     register_function("suspend", 0, 1, bf_suspend, TYPE_NUMERIC);
     register_function("yin", 0, 3, bf_yield_if_needed, TYPE_NUMERIC, TYPE_INT, TYPE_INT);
@@ -3870,7 +3875,11 @@ register_execute(void)
 
     register_function("seconds_left", 0, 0, bf_seconds_left);
     register_function("ticks_left", 0, 0, bf_ticks_left);
-    register_function("pass", 0, -1, bf_pass);
+
+    func_id = register_function("pass", 0, -1, bf_pass);
+    /* pass() implicitly propagates the VR variables (dobj, dobjstr, player, etc) to the parent verb call. */
+    set_bi_function_requires_bi_variables(func_id, 1);
+
     register_function("set_task_perms", 1, 1, bf_set_task_perms, TYPE_OBJ);
     register_function("task_perms", 0, 0, bf_task_perms);
     register_function("caller_perms", 0, 0, bf_caller_perms);

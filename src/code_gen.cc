@@ -18,6 +18,7 @@
 #include <limits.h>
 
 #include "ast.h"
+#include "functions.h"
 #include "opcode.h"
 #include "program.h"
 #include "server.h"
@@ -485,6 +486,25 @@ exit_loop(State * state)
 
 
 static void
+emit_call_bi_func_op(Opcode op, unsigned func, State * state)
+{
+    emit_byte(op, state);
+#ifdef BYTECODE_REDUCE_REF
+    /*
+     * Reuse the OP_CALL_VERB pushmap marker for builtins that internally
+     * read the caller's live VR variables (dobj, player, etc) via
+     * call_verb2 - e.g. pass(). This makes the existing OP_CALL_VERB check
+     * in stmt_to_code() protect these builtin calls the same way it
+     * protects real verb calls, with no change to that check needed.
+     */
+    if (bi_function_requires_bi_variables(func)) {
+        state->pushmap[state->num_bytes - 1] = OP_CALL_VERB;
+    }
+#endif /* BYTECODE_REDUCE_REF */
+    emit_byte(func, state);
+}
+
+static void
 emit_call_verb_op(Opcode op, State * state)
 {
     emit_byte(op, state);
@@ -808,8 +828,7 @@ generate_expr(Expr * expr, State * state)
             break;
         case EXPR_CALL:
             generate_arg_list(expr->e.call.args, state);
-            emit_byte(OP_BI_FUNC_CALL, state);
-            emit_byte(expr->e.call.func, state);
+            emit_call_bi_func_op(OP_BI_FUNC_CALL, expr->e.call.func, state);
             break;
         case EXPR_VERB:
             generate_expr(expr->e.verb.obj, state);

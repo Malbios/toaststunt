@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <limits.h>
 #include <string>
+#include <pthread.h>
 
 #include "pcre_moo.h"
 #include "functions.h"

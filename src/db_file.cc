@@ -951,7 +951,10 @@ read_db_file(void)
         }
     }
 
-    if (DBV_NextGen > dbio_input_version) {
+    if (skip_db_validation) {
+        oklog("VALIDATE: skipped (--skip-validate)\n");
+    }
+    else if (DBV_NextGen > dbio_input_version) {
         if (!v4_validate_hierarchies()) {
             errlog("READ_DB_FILE: Errors in object hierarchies.\n");
             return 0;
