@@ -985,4 +985,52 @@ class TestAlgorithms < Test::Unit::TestCase
     end
   end
 
+  def test_that_listremove_all_removes_every_occurrence_of_a_value
+    run_test_as('programmer') do
+      assert_equal [1, 3, 4], simplify(command('; return listremove_all({1, 2, 3, 2, 4, 2}, 2);'))
+    end
+  end
+
+  def test_that_listremove_all_is_a_no_op_when_the_value_is_not_present
+    run_test_as('programmer') do
+      assert_equal [1, 2, 3], simplify(command('; return listremove_all({1, 2, 3}, 99);'))
+    end
+  end
+
+  def test_that_listremove_all_works_on_an_empty_list
+    run_test_as('programmer') do
+      assert_equal [], simplify(command('; return listremove_all({}, 1);'))
+    end
+  end
+
+  def test_that_listremove_all_can_empty_the_list_entirely
+    run_test_as('programmer') do
+      assert_equal [], simplify(command('; return listremove_all({1, 1, 1}, 1);'))
+    end
+  end
+
+  def test_that_listremove_all_does_not_mutate_the_original_list
+    run_test_as('programmer') do
+      assert_equal [[1, 2, 3], [1, 3]], simplify(command('; x = {1, 2, 3}; y = listremove_all(x, 2); return {x, y};'))
+    end
+  end
+
+  def test_that_listremove_all_defaults_to_case_sensitive_comparison
+    run_test_as('programmer') do
+      assert_equal ["A", "B"], simplify(command('; return listremove_all({"A", "a", "B"}, "a");'))
+    end
+  end
+
+  def test_that_listremove_all_can_be_made_case_insensitive
+    run_test_as('programmer') do
+      assert_equal "B", simplify(command('; return listremove_all({"A", "a", "B"}, "a", 0);'))
+    end
+  end
+
+  def test_that_listremove_all_rejects_wrong_argument_types
+    run_test_as('programmer') do
+      assert_equal E_TYPE, simplify(command('; return listremove_all(5, 1);'))
+    end
+  end
+
 end
