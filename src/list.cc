@@ -784,6 +784,26 @@ bf_listset(Var arglist, Byte next, void *vdata, Objid progr)
 }
 
 static package
+bf_listget(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    int nargs = arglist.v.list[0].v.num;
+    Var list = arglist.v.list[1];
+    Num index = arglist.v.list[2].v.num;
+    Var ret;
+
+    if (index >= 1 && index <= listlength(list))
+        ret = var_ref(list.v.list[index]);
+    else if (nargs >= 3)
+        ret = var_ref(arglist.v.list[3]);
+    else
+        ret = Var::new_int(0);
+
+    free_var(arglist);
+
+    return make_var_pack(ret);
+}
+
+static package
 bf_equal(Var arglist, Byte next, void *vdata, Objid progr)
 {
     Var r;
@@ -1772,6 +1792,8 @@ register_list(void)
     register_function("listdelete", 2, 2, bf_listdelete, TYPE_LIST, TYPE_INT);
     register_function("listset", 3, 3, bf_listset,
                       TYPE_LIST, TYPE_ANY, TYPE_INT);
+    register_function("listget", 2, 3, bf_listget,
+                      TYPE_LIST, TYPE_INT, TYPE_ANY);
     register_function("equal", 2, 2, bf_equal, TYPE_ANY, TYPE_ANY);
     register_function("explode", 1, 3, bf_explode, TYPE_STR, TYPE_STR, TYPE_INT);
     register_function("reverse", 1, 1, bf_reverse, TYPE_ANY);
