@@ -18,3 +18,10 @@
 #include "structures.h"
 
 extern int ismember(Var value, Var list, int case_matters);
+
+/* True if `v' is the shared empty-list or empty-map singleton (the value
+ * handed out by every new_list(0)/new_map() call, reference-counted rather
+ * than freshly allocated). Mutators must copy-on-write instead of mutating
+ * or freeing it in place, or they corrupt every other outstanding empty
+ * list/map in the process. */
+extern bool is_shared_empty(const Var &v);

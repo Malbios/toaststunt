@@ -42,6 +42,16 @@ do_map_iteration(Var key, Var value, void *data, int first)
     return 0;
 }
 
+bool
+is_shared_empty(const Var &v)
+{
+    if (v.type == TYPE_LIST)
+        return v.v.list == emptylist.v.list;
+    if (v.type == TYPE_MAP)
+        return v.v.tree == emptymap.v.tree;
+    return false;
+}
+
 int
 ismember(Var lhs, Var rhs, int case_matters)
 {

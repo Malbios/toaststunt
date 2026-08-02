@@ -172,7 +172,7 @@ listset(Var list, Var value, int pos)
 {   /* consumes `list', `value' */
     Var _new = list;
 
-    if (var_refcount(list) > 1) {
+    if (is_shared_empty(list) || var_refcount(list) > 1) {
         _new = var_dup(list);
         free_var(list);
     }
@@ -201,7 +201,7 @@ doinsert(Var list, Var value, int pos)
     int size = list.v.list[0].v.num + 1;
 
     /* Bandaid: See the top of list.cc for an explanation */
-    if (list.v.list != emptylist.v.list && var_refcount(list) == 1 && pos == size) {
+    if (!is_shared_empty(list) && var_refcount(list) == 1 && pos == size) {
         list.v.list = (Var *) myrealloc(list.v.list, (size + 1) * sizeof(Var), M_LIST);
 #ifdef MEMO_SIZE
         /* reset the memoized size */
