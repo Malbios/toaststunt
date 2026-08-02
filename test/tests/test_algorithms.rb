@@ -940,4 +940,49 @@ class TestAlgorithms < Test::Unit::TestCase
     end
   end
 
+  def test_that_listget_returns_the_element_when_in_bounds
+    run_test_as('programmer') do
+      assert_equal 20, simplify(command('; return listget({10, 20, 30}, 2);'))
+    end
+  end
+
+  def test_that_listget_returns_zero_when_out_of_bounds_with_no_default
+    run_test_as('programmer') do
+      assert_equal 0, simplify(command('; return listget({10, 20, 30}, 5);'))
+    end
+  end
+
+  def test_that_listget_returns_the_default_when_out_of_bounds
+    run_test_as('programmer') do
+      assert_equal "fallback", simplify(command('; return listget({10, 20, 30}, 5, "fallback");'))
+      assert_equal [1, 2], simplify(command('; return listget({10, 20, 30}, 5, {1, 2});'))
+    end
+  end
+
+  def test_that_listget_treats_zero_and_negative_indices_as_out_of_bounds
+    run_test_as('programmer') do
+      assert_equal "fb", simplify(command('; return listget({10, 20, 30}, 0, "fb");'))
+      assert_equal "fb", simplify(command('; return listget({10, 20, 30}, -1, "fb");'))
+    end
+  end
+
+  def test_that_listget_works_on_an_empty_list
+    run_test_as('programmer') do
+      assert_equal "fb", simplify(command('; return listget({}, 1, "fb");'))
+    end
+  end
+
+  def test_that_listget_does_not_affect_normal_index_out_of_range_behavior
+    run_test_as('programmer') do
+      assert_equal E_RANGE, simplify(command('; return {10, 20, 30}[5];'))
+    end
+  end
+
+  def test_that_listget_rejects_wrong_argument_types
+    run_test_as('programmer') do
+      assert_equal E_TYPE, simplify(command('; return listget(5, 1);'))
+      assert_equal E_TYPE, simplify(command('; return listget({1, 2}, "x");'))
+    end
+  end
+
 end

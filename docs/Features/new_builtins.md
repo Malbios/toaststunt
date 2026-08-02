@@ -27,3 +27,4 @@
     - connection_info (show detailed information about a particular connection)
     - parse_ansi (parses color tags into their ANSI equivalents)
     - remove_ansi (strips ANSI tags from strings)
+    - listget (return list[index], or a default value instead of raising E_RANGE if index is out of bounds)
