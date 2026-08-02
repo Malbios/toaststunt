@@ -2779,6 +2779,59 @@ kill_task(int id, Objid owner)
     return E_INVARG;
 }
 
+/* Mirrors the source core's task_valid/bf_task_valid implementation
+ * verbatim: an unscoped (no permission filtering, unlike queued_tasks())
+ * global lookup across every live task-queue structure. */
+static int
+task_valid(int id)
+{
+    task **tt;
+    tqueue *tq;
+
+    if (id == current_task_id) {
+        return 1;
+    }
+
+    for (tt = &waiting_tasks; *tt; tt = &((*tt)->next)) {
+        task *t = *tt;
+        if (t->kind == TASK_FORKED && t->t.forked.id == id)
+            return 1;
+        else if (t->kind == TASK_SUSPENDED &&
+                 t->t.suspended.the_vm->task_id == id)
+            return 1;
+    }
+
+    for (tq = idle_tqueues; tq; tq = tq->next) {
+        if (tq->reading && tq->reading_vm->task_id == id)
+            return 1;
+    }
+
+    for (tq = active_tqueues; tq; tq = tq->next) {
+        if (tq->reading && tq->reading_vm->task_id == id)
+            return 1;
+
+        for (tt = &(tq->first_bg); *tt; tt = &((*tt)->next)) {
+            task *t = *tt;
+            if ((t->kind == TASK_FORKED && t->t.forked.id == id) ||
+                (t->kind == TASK_SUSPENDED &&
+                 t->t.suspended.the_vm->task_id == id))
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
+static package
+bf_task_valid(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    Var vr;
+    vr.type = TYPE_INT;
+    vr.v.num = task_valid(arglist.v.list[1].v.num);
+    free_var(arglist);
+    return make_var_pack(vr);
+}
+
 static package
 bf_kill_task(Var arglist, Byte next, void *vdata, Objid progr)
 {
@@ -3058,6 +3111,7 @@ register_tasks(void)
     register_function("finished_tasks", 0, 0, bf_finished_tasks);
 #endif
     register_function("kill_task", 1, 1, bf_kill_task, TYPE_INT);
+    register_function("task_valid", 1, 1, bf_task_valid, TYPE_INT);
     register_function("output_delimiters", 1, 1, bf_output_delimiters,
                       TYPE_OBJ);
     register_function("queue_info", 0, 1, bf_queue_info, TYPE_OBJ);

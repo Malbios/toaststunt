@@ -126,6 +126,8 @@ const char *default_key_path = DEFAULT_TLS_KEY;
 #endif
 
 int clear_last_move = false;
+int skip_db_validation = false;
+int force_binary_notify = false;
 char *bind_ipv4 = nullptr;
 char *bind_ipv6 = nullptr;
 char *file_subdir = FILE_SUBDIR;
@@ -1937,6 +1939,8 @@ print_usage()
     fprintf(stderr, "  %-20s %s\n", "-w, --waif-type", "convert waifs from the specified type (check with typeof(waif) in your old MOO)");
     fprintf(stderr, "  %-20s %s\n", "-f, --start-script", "file to load and pass to `#0:do_start_script()'");
     fprintf(stderr, "  %-20s %s\n", "-c, --start-line", "line to pass to `#0:do_start_script()'");
+    fprintf(stderr, "  %-20s %s\n", "--skip-validate", "skip the object-hierarchy validation pass on load (only safe against a db already known-good)");
+    fprintf(stderr, "  %-20s %s\n", "--force-binary-notify", "always decode ~XX binary-string escapes in notify() output, for every connection");
     fprintf(stderr, "\nDIRECTORY OPTIONS\n");
     fprintf(stderr, "  %-20s %s\n", "-i, --file-dir", "directory to look for files for use with FileIO functions");
     fprintf(stderr, "  %-20s %s\n", "-x, --exec-dir", "directory to look for executables for use with the exec() function");
@@ -2015,6 +2019,8 @@ main(int argc, char **argv)
         {"tls-key",         required_argument,  nullptr,            'k'},
         {"file-dir",        required_argument,  nullptr,            'i'},
         {"exec-dir",        required_argument,  nullptr,            'x'},
+        {"skip-validate",   no_argument,        nullptr,            'S'},
+        {"force-binary-notify", no_argument,    nullptr,            'B'},
         {"help",            no_argument,        nullptr,            'h'},
         {nullptr,           0,                  nullptr,              0}
     };
@@ -2063,6 +2069,28 @@ main(int argc, char **argv)
 
             case 'm':                   /* --clear-move; clear all last_move properties and don't set new ones */
                 clear_last_move = true;
+                break;
+
+            case 'S':                   /* --skip-validate; skip the object-hierarchy
+                                          * validation pass on load. Only safe against a
+                                          * db file that just finished a clean, fully-
+                                          * validated boot - a genuinely broken/cyclic
+                                          * object graph will now hang or crash on first
+                                          * use instead of failing fast at startup. */
+                skip_db_validation = true;
+                break;
+
+            case 'B':                   /* --force-binary-notify; always decode ~XX
+                                          * binary-string escapes in notify() output,
+                                          * regardless of the per-connection "binary"
+                                          * option. Some other cores (this one
+                                          * included) hard-code this on for every
+                                          * connection at the engine level rather than
+                                          * ever toggling it from moocode - this flag
+                                          * reproduces that without changing the
+                                          * standard opt-in default for other databases
+                                          * built from this same binary. */
+                force_binary_notify = true;
                 break;
 
             case 'o':                   /* --outbound; enable outbound network connections */
@@ -2962,13 +2990,37 @@ bf_notify(Var arglist, Byte next, void *vdata, Objid progr)
     }
     r.type = TYPE_INT;
     if (h && !h->disconnect_me.load()) {
-        if (h->binary) {
+        if (h->binary || force_binary_notify) {
             int length;
 
             line = binary_to_raw_bytes(line, &length);
             if (!line) {
                 free_var(arglist);
                 return make_error_pack(E_INVARG);
+            }
+            if (force_binary_notify && !h->binary) {
+                /* The source core's own binary_to_raw_bytes() always
+                 * appends a trailing "\r\n" before returning - a
+                 * notify()-output-specific behavior baked into the
+                 * shared decode function there. ToastStunt's decoder is
+                 * kept general-purpose (also used for
+                 * base64/crypto/exec/fileio, where an auto-appended CRLF
+                 * would corrupt the data), so replicate the line
+                 * terminator here instead - scoped to only the forced
+                 * path, so genuine/native binary-mode notify() (a real
+                 * per-connection opt-in, if anything else ever sets it)
+                 * keeps ToastStunt's original, un-terminated behavior. */
+                static Stream *terminated = nullptr;
+                if (!terminated)
+                    terminated = new_stream(100);
+                else
+                    reset_stream(terminated);
+                for (int i = 0; i < length; i++)
+                    stream_add_char(terminated, line[i]);
+                stream_add_char(terminated, '\r');
+                stream_add_char(terminated, '\n');
+                length = stream_length(terminated);
+                line = reset_stream(terminated);
             }
             r.v.num = network_send_bytes(h->nhandle, line, length, !no_flush);
         } else

@@ -26,6 +26,7 @@
 extern int waif_conversion_type;
 
 extern int clear_last_move;
+extern int skip_db_validation;
 
 /*********** Input ***********/
 

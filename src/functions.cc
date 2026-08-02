@@ -100,6 +100,7 @@ struct bft_entry {
     bf_read_type read;
     bf_write_type write;
     int _protected;
+    int requires_bi_variables;
 };
 
 static struct bft_entry bf_table[MAX_FUNC];
@@ -131,6 +132,7 @@ register_common(const char *name, int minargs, int maxargs, bf_type func,
     bf_table[top_bf_table].read = read;
     bf_table[top_bf_table].write = write;
     bf_table[top_bf_table]._protected = 0;
+    bf_table[top_bf_table].requires_bi_variables = 0;
 
     if (num_arg_types > 0)
 	bf_table[top_bf_table].prototype =
@@ -168,6 +170,35 @@ register_function_with_read_write(const char *name, int minargs, int maxargs,
     ans = register_common(name, minargs, maxargs, func, read, write, args);
     va_end(args);
     return ans;
+}
+
+/*
+ * Mark a builtin as needing the caller's VR variables (dobj, dobjstr,
+ * player, etc) to still be live in rt_env when it runs - e.g. pass(),
+ * which reads them straight out of the caller's activation the same way
+ * OP_CALL_VERB does. code_gen.cc uses this to protect them from being
+ * cleared early by BYTECODE_REDUCE_REF.
+ */
+unsigned
+set_bi_function_requires_bi_variables(unsigned n, int require_bi_variables)
+{
+    if (n >= top_bf_table) {
+        return FUNC_NOT_FOUND;
+    } else {
+        bf_table[n].requires_bi_variables = require_bi_variables;
+        return n;
+    }
+}
+
+int
+bi_function_requires_bi_variables(unsigned n)
+{
+    if (n >= top_bf_table) {
+        errlog("BI_FUNCTION_REQUIRES_BI_VARIABLES: Unknown function number: %u\n", n);
+        return 0;
+    } else {
+        return bf_table[n].requires_bi_variables;
+    }
 }
 
 /*** looking up functions -- by name or num ***/

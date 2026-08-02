@@ -920,6 +920,37 @@ bf_relative_heading(Var arglist, Byte next, void *vdata, Objid progr)
     return make_var_pack(s);
 }
 
+/* The source core's mod(a,b) is the same floored-modulo formula
+ * ToastStunt already implements internally as do_modulus() (used by the
+ * % operator) - the one real difference is that it auto-promotes a
+ * mismatched INT/FLOAT pair to FLOAT before dividing, where
+ * do_modulus()/'%' require matching types and raise E_TYPE otherwise.
+ * Promote here to match that behavior, then delegate to the existing
+ * do_modulus(). */
+static package
+bf_mod(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    Var a = arglist.v.list[1];
+    Var b = arglist.v.list[2];
+
+    if (a.type != b.type) {
+        if (a.type == TYPE_INT && b.type == TYPE_FLOAT) {
+            a = Var::new_float((double)a.v.num);
+        } else if (a.type == TYPE_FLOAT && b.type == TYPE_INT) {
+            b = Var::new_float((double)b.v.num);
+        } else {
+            free_var(arglist);
+            return make_error_pack(E_TYPE);
+        }
+    }
+
+    Var result = do_modulus(a, b);
+    free_var(arglist);
+    if (result.type == TYPE_ERR)
+        return make_error_pack(result.v.err);
+    return make_var_pack(result);
+}
+
 Var zero;           /* useful constant */
 
 void
@@ -935,6 +966,7 @@ register_numbers(void)
     register_function("min", 1, -1, bf_min, TYPE_NUMERIC);
     register_function("max", 1, -1, bf_max, TYPE_NUMERIC);
     register_function("abs", 1, 1, bf_abs, TYPE_NUMERIC);
+    register_function("mod", 2, 2, bf_mod, TYPE_NUMERIC, TYPE_NUMERIC);
     register_function("random", 0, 2, bf_random, TYPE_INT, TYPE_INT);
     register_function("reseed_random", 0, 0, bf_reseed_random);
     register_function("frandom", 1, 2, bf_frandom, TYPE_FLOAT, TYPE_FLOAT);
