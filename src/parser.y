@@ -81,7 +81,7 @@ static void     check_loop_name(const char *, enum loop_exit_kind);
   Scatter      *scatter;
 }
 
-%type   <stmt>   statements statement elsepart
+%type   <stmt>   statements statement elsepart final_statement statements_end
 %type   <arm>    elseifs
 %type   <expr>   expr default
 %type   <args>   arglist ne_arglist codes
@@ -114,7 +114,7 @@ static void     check_loop_name(const char *, enum loop_exit_kind);
 
 %%
 
-program:  statements
+program:  statements_end
 		{ prog_start = $1; }
 	;
 
@@ -136,7 +136,7 @@ statements:
 	;
 
 statement:
-	  tIF '(' expr ')' statements elseifs elsepart tENDIF
+	  tIF '(' expr ')' statements_end elseifs elsepart tENDIF
 		{
 
 		    $$ = alloc_stmt(STMT_COND);
@@ -148,7 +148,7 @@ statement:
 		{
 		    push_loop_name($2);
 		}
-	  statements tENDFOR
+	  statements_end tENDFOR
 		{
 		    $$ = alloc_stmt(STMT_LIST);
 		    $$->s.list.id = find_id($2);
@@ -162,7 +162,7 @@ statement:
 		    push_loop_name($2);
 		    push_loop_name($4);
 		}
-	  statements tENDFOR
+	  statements_end tENDFOR
 		{
 		    $$ = alloc_stmt(STMT_LIST);
 		    $$->s.list.id = find_id($2);
@@ -176,7 +176,7 @@ statement:
 		{
 		    push_loop_name($2);
 		}
-	  statements tENDFOR
+	  statements_end tENDFOR
 		{
 		    $$ = alloc_stmt(STMT_RANGE);
 		    $$->s.range.id = find_id($2);
@@ -189,7 +189,7 @@ statement:
 		{
 		    push_loop_name(0);
 		}
-	  statements tENDWHILE
+	  statements_end tENDWHILE
 		{
 		    $$ = alloc_stmt(STMT_WHILE);
 		    $$->s.loop.id = -1;
@@ -201,7 +201,7 @@ statement:
 		{
 		    push_loop_name($2);
 		}
-	  statements tENDWHILE
+	  statements_end tENDWHILE
 		{
 		    $$ = alloc_stmt(STMT_WHILE);
 		    $$->s.loop.id = find_id($2);
@@ -213,7 +213,7 @@ statement:
 		{
 		    suspend_loop_scope();
 		}
-	  statements tENDFORK
+	  statements_end tENDFORK
 		{
 		    $$ = alloc_stmt(STMT_FORK);
 		    $$->s.fork.id = -1;
@@ -225,7 +225,7 @@ statement:
 		{
 		    suspend_loop_scope();
 		}
-	  statements tENDFORK
+	  statements_end tENDFORK
 		{
 		    $$ = alloc_stmt(STMT_FORK);
 		    $$->s.fork.id = find_id($2);
@@ -274,13 +274,13 @@ statement:
 		}
 	| ';'
 		{ $$ = 0; }
-	| tTRY statements excepts tENDTRY
+	| tTRY statements_end excepts tENDTRY
 		{
 		    $$ = alloc_stmt(STMT_TRY_EXCEPT);
 		    $$->s._catch.body = $2;
 		    $$->s._catch.excepts = $3;
 		}
-	| tTRY statements tFINALLY statements tENDTRY
+	| tTRY statements_end tFINALLY statements_end tENDTRY
 		{
 		    $$ = alloc_stmt(STMT_TRY_FINALLY);
 		    $$->s.finally.body = $2;
@@ -288,10 +288,69 @@ statement:
 		}
 	;
 
+final_statement:
+	  expr
+		{
+		    $$ = alloc_stmt(STMT_EXPR);
+		    $$->s.expr = $1;
+		}
+	| tBREAK
+		{
+		    check_loop_name(0, LOOP_BREAK);
+		    $$ = alloc_stmt(STMT_BREAK);
+		    $$->s.exit = -1;
+		}
+	| tBREAK tID
+		{
+		    check_loop_name($2, LOOP_BREAK);
+		    $$ = alloc_stmt(STMT_BREAK);
+		    $$->s.exit = find_id($2);
+		}
+	| tCONTINUE
+		{
+		    check_loop_name(0, LOOP_CONTINUE);
+		    $$ = alloc_stmt(STMT_CONTINUE);
+		    $$->s.exit = -1;
+		}
+	| tCONTINUE tID
+		{
+		    check_loop_name($2, LOOP_CONTINUE);
+		    $$ = alloc_stmt(STMT_CONTINUE);
+		    $$->s.exit = find_id($2);
+		}
+	| tRETURN expr
+		{
+		    $$ = alloc_stmt(STMT_RETURN);
+		    $$->s.expr = $2;
+		}
+	| tRETURN
+		{
+		    $$ = alloc_stmt(STMT_RETURN);
+		    $$->s.expr = 0;
+		}
+	;
+
+statements_end:
+	  statements
+		{ $$ = $1; }
+	| statements final_statement
+		{
+		    if ($1) {
+			Stmt *tmp = $1;
+
+			while (tmp->next)
+			    tmp = tmp->next;
+			tmp->next = $2;
+			$$ = $1;
+		    } else
+			$$ = $2;
+		}
+	;
+
 elseifs:
 	  /* NOTHING */
 		{ $$ = 0; }
-	| elseifs tELSEIF '(' expr ')' statements
+	| elseifs tELSEIF '(' expr ')' statements_end
 		{
 		    Cond_Arm *this_arm = alloc_cond_arm($4, $6);
 		    
@@ -310,7 +369,7 @@ elseifs:
 elsepart:
 	  /* NOTHING */
 		{ $$ = 0; }
-	| tELSE statements
+	| tELSE statements_end
 		{ $$ = $2; }
 	;
 
@@ -344,7 +403,7 @@ excepts:
 	;
 
 except:
-	  opt_id '(' codes ')' statements
+	  opt_id '(' codes ')' statements_end
 		{ $$ = alloc_except($1 ? find_id($1) : -1, $3, $5); }
 	;
 

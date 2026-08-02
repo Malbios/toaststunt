@@ -18,3 +18,4 @@
     - Build system is now CMake
     - Boolean (BOOL) type
     - Allow handling of SIGUSR signals in the database with `#0:handle_signal()`
+    - The trailing semicolon on a block's last statement is optional when immediately followed by `endif`/`endfor`/`endwhile`/`endfork`/`endtry`/`else`/`elseif`/`except`/`finally`, or by the end of the program
