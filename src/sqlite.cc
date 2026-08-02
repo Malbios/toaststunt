@@ -25,26 +25,34 @@ static int next_sqlite_handle = 1;
 
 /* The MOO database really dislikes newlines, so we'll want to strip them.
  * I like what MOOSQL did here by replacing them with tabs, so we'll do that.
- * TODO: Check the performance impact of this being on by default with long strings. */
+ * Only runs when the connection has SQLITE_SANITIZE_STRINGS set (off by
+ * default, see allocate_handle()), so this is opt-in, not an always-on cost. */
 static void sanitize_string_for_moo(char *string)
 {
     if (!string)
         return;
 
+    size_t len = strlen(string);
     char *p = string;
+    char *end = string + len;
 
-    while (*p)
+    while ((p = (char *)memchr(p, '\n', end - p)) != nullptr)
     {
-        if (*p == '\n')
-            *p = '\t';
-
+        *p = '\t';
         ++p;
     }
 }
 
 /* Take a result string and convert it into a MOO type.
  * Return a Var of the appropriate MOO type for the value.
- * TODO: Try to parse strings containing MOO lists? */
+ * Deliberately does not attempt to parse a string that merely looks like a
+ * MOO list literal (e.g. "{1, 2, 3}") into TYPE_LIST: SQLITE_PARSE_TYPES is
+ * on by default, so any existing world storing free-form text, JSON, or
+ * other serialized data in a column that happens to look list-shaped would
+ * silently change type with no opt-in. Doing this safely needs a
+ * purpose-built literal parser (nothing in this codebase parses MOO source
+ * text outside of the full compiler behind eval()) gated behind a new,
+ * separate opt-in option bit -- tracked as its own task. */
 static Var string_to_moo_type(char* str, bool parse_objects, bool sanitize_string)
 {
     Var s;
@@ -462,7 +470,8 @@ static void sqlite_execute_thread_callback(Var args, Var *r, void *extra_data)
 					s.v.str = str_dup(str);
 				}
 				else {
-					s = string_to_moo_type(str, handle->options & SQLITE_PARSE_OBJECTS, handle->options & SQLITE_SANITIZE_STRINGS);
+					// Already sanitized above if requested -- don't do it again.
+					s = string_to_moo_type(str, handle->options & SQLITE_PARSE_OBJECTS, false);
 				}
 				row = listappend(row, s);
 			}
