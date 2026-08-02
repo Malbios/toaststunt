@@ -293,4 +293,81 @@ class TestMoocodeParsing < Test::Unit::TestCase
     end
   end
 
+  # The trailing semicolon on the last statement in a block is optional when
+  # immediately followed by a block-closing keyword (or end of program) --
+  # the closer itself already unambiguously ends the block, so requiring a
+  # semicolon there too is redundant. Decompiled output always normalizes
+  # the semicolon back in, since the AST is identical either way.
+
+  def test_that_decompiling_if_without_trailing_semicolon_works
+    run_test_as('programmer') do
+      o = create(:nothing)
+      add_verb(o, [player, 'xd', 'v'], ['this', 'none', 'this'])
+      assert_equal [], set_verb_code(o, 'v', ['if (1) return 5 endif'])
+      assert_equal ['if (1)', '  return 5;', 'endif'], verb_code(o, 'v')
+    end
+  end
+
+  def test_that_decompiling_if_else_without_trailing_semicolon_works
+    run_test_as('programmer') do
+      o = create(:nothing)
+      add_verb(o, [player, 'xd', 'v'], ['this', 'none', 'this'])
+      assert_equal [], set_verb_code(o, 'v', ['if (0) return 1 else return 2 endif'])
+      assert_equal ['if (0)', '  return 1;', 'else', '  return 2;', 'endif'], verb_code(o, 'v')
+    end
+  end
+
+  def test_that_decompiling_for_without_trailing_semicolon_works
+    run_test_as('programmer') do
+      o = create(:nothing)
+      add_verb(o, [player, 'xd', 'v'], ['this', 'none', 'this'])
+      assert_equal [], set_verb_code(o, 'v', ['for i in [1..3] break endfor'])
+      assert_equal ['for i in [1..3]', '  break;', 'endfor'], verb_code(o, 'v')
+    end
+  end
+
+  def test_that_decompiling_while_without_trailing_semicolon_works
+    run_test_as('programmer') do
+      o = create(:nothing)
+      add_verb(o, [player, 'xd', 'v'], ['this', 'none', 'this'])
+      assert_equal [], set_verb_code(o, 'v', ['x = 0; while (x < 1) x = x + 1; continue endwhile return x;'])
+      assert_equal ['x = 0;', 'while (x < 1)', '  x = x + 1;', '  continue;', 'endwhile', 'return x;'], verb_code(o, 'v')
+    end
+  end
+
+  def test_that_decompiling_try_except_without_trailing_semicolon_works
+    run_test_as('programmer') do
+      o = create(:nothing)
+      add_verb(o, [player, 'xd', 'v'], ['this', 'none', 'this'])
+      assert_equal [], set_verb_code(o, 'v', ['try return 1 except e (ANY) return 2 endtry'])
+      assert_equal ['try', '  return 1;', 'except e (ANY)', '  return 2;', 'endtry'], verb_code(o, 'v')
+    end
+  end
+
+  def test_that_decompiling_try_finally_without_trailing_semicolon_works
+    run_test_as('programmer') do
+      o = create(:nothing)
+      add_verb(o, [player, 'xd', 'v'], ['this', 'none', 'this'])
+      assert_equal [], set_verb_code(o, 'v', ['x = 0; try x = 1 finally x = x + 1 endtry return x;'])
+      assert_equal ['x = 0;', 'try', '  x = 1;', 'finally', '  x = x + 1;', 'endtry', 'return x;'], verb_code(o, 'v')
+    end
+  end
+
+  def test_that_decompiling_final_program_statement_without_trailing_semicolon_works
+    run_test_as('programmer') do
+      o = create(:nothing)
+      add_verb(o, [player, 'xd', 'v'], ['this', 'none', 'this'])
+      assert_equal [], set_verb_code(o, 'v', ['return 42'])
+      assert_equal 'return 42;', verb_code(o, 'v')
+    end
+  end
+
+  def test_that_semicolon_is_still_required_between_non_final_statements
+    run_test_as('programmer') do
+      o = create(:nothing)
+      add_verb(o, [player, 'xd', 'v'], ['this', 'none', 'this'])
+      assert_not_equal [], set_verb_code(o, 'v', ['x = 1 y = 2;'])
+    end
+  end
+
 end
