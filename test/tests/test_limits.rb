@@ -345,4 +345,12 @@ class TestLimits < Test::Unit::TestCase
     end
   end
 
+  def test_that_pad_respects_the_max_string_concat_quota
+    run_test_as('wizard') do
+      set_max_concat(3210)
+      assert_equal 3211, simplify(command('; return length(pad("x", 3211));'))
+      assert_equal E_QUOTA, simplify(command('; return length(pad("x", 3212));'))
+    end
+  end
+
 end

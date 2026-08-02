@@ -1794,6 +1794,54 @@ bf_remove_ansi(Var arglist, Byte next, void *vdata, Objid progr)
 #undef MARK_FOR_REMOVAL
 }
 
+static package
+bf_pad(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (str, width [, char] [, side]) */
+    int nargs = arglist.v.list[0].v.num;
+    const char *str = arglist.v.list[1].v.str;
+    int width = arglist.v.list[2].v.num;
+    int len = memo_strlen(str);
+
+    char fill = ' ';
+    if (nargs >= 3 && memo_strlen(arglist.v.list[3].v.str) > 0)
+        fill = arglist.v.list[3].v.str[0];
+
+    const char *side = (nargs >= 4) ? arglist.v.list[4].v.str : "right";
+    if (strcmp(side, "left") && strcmp(side, "right") && strcmp(side, "both")) {
+        free_var(arglist);
+        return make_error_pack(E_INVARG);
+    }
+
+    if (width <= len) {
+        Var r = str_dup_to_var(str);
+        free_var(arglist);
+        return make_var_pack(r);
+    }
+
+    if ((size_t)width > stream_alloc_maximum) {
+        free_var(arglist);
+        return make_space_pack();
+    }
+
+    int total_pad = width - len;
+    int left_pad = !strcmp(side, "left") ? total_pad
+                 : !strcmp(side, "both") ? total_pad / 2
+                 : 0;
+    int right_pad = total_pad - left_pad;
+
+    char *buf = (char *)mymalloc(width + 1, M_STRING);
+    memset(buf, fill, left_pad);
+    memcpy(buf + left_pad, str, len);
+    memset(buf + left_pad + len, fill, right_pad);
+    buf[width] = '\0';
+
+    Var r;
+    r.type = TYPE_STR;
+    r.v.str = buf;
+    free_var(arglist);
+    return make_var_pack(r);
+}
+
 void
 register_list(void)
 {
@@ -1843,4 +1891,5 @@ register_list(void)
                       TYPE_STR, TYPE_STR, TYPE_STR, TYPE_ANY);
     register_function("parse_ansi", 1, 1, bf_parse_ansi, TYPE_STR);
     register_function("remove_ansi", 1, 1, bf_remove_ansi, TYPE_STR);
+    register_function("pad", 2, 4, bf_pad, TYPE_STR, TYPE_INT, TYPE_STR, TYPE_STR);
 }

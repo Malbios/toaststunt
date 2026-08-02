@@ -151,4 +151,55 @@ class TestStringOperations < Test::Unit::TestCase
     end
   end
 
+  def test_that_pad_defaults_to_padding_on_the_right_with_a_space
+    run_test_as('programmer') do
+      assert_equal 'ab   ', simplify(command('; return pad("ab", 5);'))
+    end
+  end
+
+  def test_that_pad_can_pad_on_the_left
+    run_test_as('programmer') do
+      assert_equal '   ab', simplify(command('; return pad("ab", 5, " ", "left");'))
+    end
+  end
+
+  def test_that_pad_can_center_with_both
+    run_test_as('programmer') do
+      assert_equal '--ab--', simplify(command('; return pad("ab", 6, "-", "both");'))
+      assert_equal '-ab--', simplify(command('; return pad("ab", 5, "-", "both");'))
+    end
+  end
+
+  def test_that_pad_accepts_a_custom_fill_character
+    run_test_as('programmer') do
+      assert_equal 'ab***', simplify(command('; return pad("ab", 5, "*");'))
+    end
+  end
+
+  def test_that_pad_only_uses_the_first_character_of_a_multi_character_fill
+    run_test_as('programmer') do
+      assert_equal 'abxxx', simplify(command('; return pad("ab", 5, "xyz");'))
+    end
+  end
+
+  def test_that_pad_falls_back_to_a_space_for_an_empty_fill_string
+    run_test_as('programmer') do
+      assert_equal 'ab   ', simplify(command('; return pad("ab", 5, "");'))
+    end
+  end
+
+  def test_that_pad_is_a_no_op_when_width_is_already_met_or_exceeded
+    run_test_as('programmer') do
+      assert_equal 'abcde', simplify(command('; return pad("abcde", 5);'))
+      assert_equal 'abcdef', simplify(command('; return pad("abcdef", 3);'))
+      assert_equal 'ab', simplify(command('; return pad("ab", -5);'))
+    end
+  end
+
+  def test_that_pad_rejects_an_unrecognized_side
+    run_test_as('programmer') do
+      assert_equal E_INVARG, simplify(command('; return pad("ab", 5, " ", "up");'))
+    end
+  end
+
 end
