@@ -28,4 +28,5 @@
     - parse_ansi (parses color tags into their ANSI equivalents)
     - remove_ansi (strips ANSI tags from strings)
     - listget (return list[index], or a default value instead of raising E_RANGE if index is out of bounds)
+    - listremove_all (return a copy of list with every occurrence of value removed, unlike setremove() which only removes the first)
     - verb_callable (return true if obj:verb-name would successfully dispatch, searching ancestors and requiring the verb's `x` bit, unlike verb_info()/verb_args() which only look at the object passed in)

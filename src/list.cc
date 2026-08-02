@@ -691,6 +691,25 @@ bf_setremove(Var arglist, Byte next, void *vdata, Objid progr)
     }
 }
 
+/* Return a copy of the list with every occurrence of value removed. */
+void listremove_all_thread_callback(Var arglist, Var *ret, void *extra_data)
+{
+    Var list = arglist.v.list[1];
+    Var value = arglist.v.list[2];
+    bool case_matters = arglist.v.list[0].v.num < 3 || is_true(arglist.v.list[3]);
+
+    *ret = new_list(0);
+    for (int i = 1, len = list.v.list[0].v.num; i <= len; i++)
+        if (!equality(value, list.v.list[i], case_matters))
+            *ret = listappend(*ret, var_ref(list.v.list[i]));
+}
+
+static package
+bf_listremove_all(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    return background_thread(listremove_all_thread_callback, &arglist);
+}
+
 
 static package
 insert_or_append(Var arglist, int append1)
@@ -1788,6 +1807,8 @@ register_list(void)
     register_function("length", 1, 1, bf_length, TYPE_ANY);
     register_function("setadd", 2, 2, bf_setadd, TYPE_LIST, TYPE_ANY);
     register_function("setremove", 2, 2, bf_setremove, TYPE_LIST, TYPE_ANY);
+    register_function("listremove_all", 2, 3, bf_listremove_all,
+                      TYPE_LIST, TYPE_ANY, TYPE_INT);
     register_function("listappend", 2, 3, bf_listappend,
                       TYPE_LIST, TYPE_ANY, TYPE_INT);
     register_function("listinsert", 2, 3, bf_listinsert,
