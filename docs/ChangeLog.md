@@ -14,6 +14,7 @@
 - `listset()` no longer leaks a reference to its list and value arguments when the given position is out of range.
 - A `try`/`except` catching a raised error now builds its stack-trace list from the point of view of the catching programmer, so anonymous objects the catcher is actually allowed to see (as owner or wizard) show up as real references instead of always being blanked into invalid placeholders.
 - `sqlite_execute()` no longer sanitizes the same result string twice when `SQLITE_SANITIZE_STRINGS` is set; `sanitize_string_for_moo()` also uses a faster scan for long strings.
+- Corrected `simplex_noise()`'s 2D scale factor from a self-admitted preliminary `40.0` to `70.0`, matching Stefan Gustavson's own later corrected reference implementation; 1D/3D/4D were already using their correct, non-placeholder constants.
 
 ### New Features
 - Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.

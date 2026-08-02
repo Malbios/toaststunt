@@ -132,7 +132,8 @@ static double  grad4( int hash, double x, double y, double z, double t ) {
 
 // A lookup table to traverse the simplex around a given point in 4D.
 // Details can be found where this table is used, in the 4D noise method.
-/* TODO: This should not be required, backport it from Bill's GLSL code! */
+/* Traversal order is correct as-is; a GLSL-style bit-trick would be more
+ * concise but isn't a correctness fix, so it's left alone. */
 static unsigned char simplex[64][4] = {
     {0, 1, 2, 3}, {0, 1, 3, 2}, {0, 0, 0, 0}, {0, 2, 3, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {1, 2, 3, 0},
     {0, 2, 1, 3}, {0, 0, 0, 0}, {0, 3, 1, 2}, {0, 3, 2, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {1, 3, 2, 0},
@@ -240,7 +241,7 @@ static double snoise2(double x, double y) {
 
     // Add contributions from each corner to get the final noise value.
     // The result is scaled to return values in the interval [-1,1].
-    return 40.0f * (n0 + n1 + n2); // TODO: The scale factor is preliminary!
+    return 70.0f * (n0 + n1 + n2); // matches Gustavson's later corrected reference (SimplexNoise.java)
 }
 
 // 3D simplex noise
@@ -273,7 +274,8 @@ static double snoise3(double x, double y, double z) {
     int i1, j1, k1; // Offsets for second corner of simplex in (i,j,k) coords
     int i2, j2, k2; // Offsets for third corner of simplex in (i,j,k) coords
 
-    /* This code would benefit from a backport from the GLSL version! */
+    /* Verbose compared to a GLSL-style bit-trick, but the comparison chain
+     * itself is correct, so it's left alone rather than rewritten for style. */
     if (x0 >= y0) {
         if (y0 >= z0)
         {
