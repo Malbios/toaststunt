@@ -574,6 +574,46 @@ class TestAnonymous < Test::Unit::TestCase
     end
   end
 
+  # A `try'/`except' catching a raised error sees the stack trace from the
+  # point of view of the catching programmer, same as callers()/task_stack()
+  # above. The owner-sees-a-valid-reference case is covered by
+  # test_that_an_error_stack_trace_contains_valid_anonymous_objects_for_the_owner;
+  # this covers the complementary case, a non-owner still correctly denied.
+
+  def test_that_raise_returns_invalid_anonymous_objects_for_everyone_else
+    o = nil
+    parent = nil
+    run_test_as('wizard') do
+      add_property(player, 'stash', {}, [player, 'r'])
+      parent = create(:nothing)
+      set(parent, 'w', 1)
+
+      add_verb(parent, ['player', 'xd', 'boom'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'boom') do |vc|
+        vc << %Q|set_task_perms(player);|
+        vc << %Q|raise(E_INVARG);|
+      end
+
+      o = simplify(command(%Q|; o = player.stash["o"] = create(#{parent}, 1); o.r = o.w = 1; return tostr(player) + ".stash[\\\"o\\\"]";|))
+    end
+    run_test_as('programmer') do
+      add_verb(parent, ['player', 'xd', 'c'], ['this', 'none', 'this'])
+      set_verb_code(parent, 'c') do |vc|
+        vc << %Q|try|
+        vc << %Q|  this:boom();|
+        vc << %Q|  return "did not raise";|
+        vc << %Q|except e (ANY)|
+        vc << %Q|  frames = e[4];|
+        vc << %Q|  return {frames[1][2], valid(frames[1][1]), valid(frames[1][4])};|
+        vc << %Q|endtry|
+      end
+
+      # index [4] is verb-loc: always valid, same reasoning as the
+      # task_stack() test above.
+      assert_equal ["boom", 0, 1], call(o, 'c')
+    end
+  end
+
   def test_that_queued_tasks_returns_valid_anonymous_objects_for_wizards
     run_test_as('wizard') do
       add_property(player, 'stash', {}, [player, ''])
@@ -675,7 +715,16 @@ class TestAnonymous < Test::Unit::TestCase
     end
   end
 
-  def test_that_an_error_stack_trace_contains_invalid_anonymous_objects_for_everyone
+  # This used to assert [["a", 0, 1], ["b", 0, 1]] -- i.e. even the wizard
+  # who owns the anonymous object got an invalid placeholder for `this` in
+  # the caught error's stack trace. That was the bug itself: raise_error()
+  # hardcoded NOTHING as the viewing programmer regardless of who was
+  # actually catching, so the anonymizing permission check always failed.
+  # Now that it correctly uses the catching frame's own `progr`, the owning
+  # wizard sees a valid reference; see
+  # test_that_raise_returns_invalid_anonymous_objects_for_everyone_else
+  # below for the non-owner case, which is still correctly blanked.
+  def test_that_an_error_stack_trace_contains_valid_anonymous_objects_for_the_owner
     run_test_as('wizard') do
       add_property(player, 'stash', {}, [player, 'r'])
       parent = create(:nothing)
@@ -705,7 +754,7 @@ class TestAnonymous < Test::Unit::TestCase
       # `parent` object rather than the anonymous instance itself, verb-loc
       # is always a valid object here regardless of the anonymous
       # instance's validity -- only index [1] (`this`) tracks that.
-      assert_equal [["a", 0, 1], ["b", 0, 1]], call(o, 'c')
+      assert_equal [["a", 1, 1], ["b", 1, 1]], call(o, 'c')
     end
   end
 

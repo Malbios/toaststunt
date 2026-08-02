@@ -547,11 +547,15 @@ save_handler_info(const char *vname, Var args)
     handler_verb_args = args;
 }
 
-/* TODO: both `raise_error()' and `abort_task()' should create a stack
- * list from the point of view of the programmer _catching the error_
- * (not the point of view of the programmer who's verb generated the
- * error) however, this is hard, so for now everyone gets invalid
- * anonymous objects!
+/* When a `try'/`except' catches an error, the stack list built below is
+ * viewed from the point of view of the catching programmer (the handler
+ * activation's own `progr'), so anonymous objects the catcher is actually
+ * allowed to see (as owner or wizard) show up as real references rather
+ * than blanked placeholders. There's no equivalent "catching programmer"
+ * for an uncaught exception or a ticks/seconds abort -- both dispatch to
+ * a system verb (#0:handle_uncaught_error / #0:handle_task_timeout), not
+ * a MOO-level catcher -- so those keep the previous deny-by-default
+ * (`NOTHING') viewpoint.
  */
 
 static int
@@ -561,15 +565,18 @@ raise_error(package p, enum outcome *outcome)
     int handler_activ = find_handler_activ(p.u.raise.code);
     Finally_Reason why;
     Var value;
+    Objid viewer;
 
     if (handler_activ >= 0) {   /* handler found */
         why = FIN_RAISE;
         value = new_list(4);
+        viewer = activ_stack[handler_activ].progr;
     } else {            /* uncaught exception */
         why = FIN_UNCAUGHT;
         value = new_list(5);
         value.v.list[5] = error_backtrace_list(p.u.raise.msg);
         handler_activ = 0;  /* get entire stack in list */
+        viewer = NOTHING;
     }
     value.v.list[1] = p.u.raise.code;
     value.v.list[2].type = TYPE_STR;
@@ -578,7 +585,7 @@ raise_error(package p, enum outcome *outcome)
     value.v.list[4] = make_stack_list(activ_stack, handler_activ,
                                       top_activ_stack, 1,
                                       root_activ_vector, 1, server_flag_option_cached(SVO_INCLUDE_RT_VARS),
-                                      NOTHING);
+                                      viewer);
 
     if (why == FIN_UNCAUGHT) {
         save_handler_info("handle_uncaught_error", value);
