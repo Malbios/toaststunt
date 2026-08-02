@@ -604,6 +604,16 @@ new_map(void)
 
     std::call_once(map_init, []() {
         map = empty_map();
+
+#ifdef TRACE_REFCOUNT
+        /* Negative control for the emptylist refcount tracer (see the
+         * comment at the top of src/list.cc): the empty-map singleton has
+         * the identical unconditional-addref/no-bandaid pattern but no
+         * known crash history. If it never drifts while list operations
+         * are hammered, that narrows the bug to list-specific code. */
+        g_refcount_trace_target2 = map.v.tree;
+        trace_refcount_event(map.v.tree, "BIRTH", var_refcount(map));
+#endif
     });
 
 #ifdef ENABLE_GC

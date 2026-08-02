@@ -67,9 +67,22 @@ new_list(int size)
             emptylist.v.list = ptr;
             emptylist.v.list[0].type = TYPE_INT;
             emptylist.v.list[0].v.num = 0;
+
+#ifdef TRACE_REFCOUNT
+            /* mymalloc() already set refcount=1 directly, before this
+             * pointer was known to the addref()/delref() tracer hook, so
+             * log that birth explicitly here rather than have the trace
+             * confusingly appear to start at refcount=2. */
+            g_refcount_trace_target = ptr;
+            trace_refcount_event(ptr, "BIRTH", 1);
+#endif
         });
 
 #ifdef ENABLE_GC
+        /* emptylist's color is pinned GC_GREEN forever (set once above,
+         * never reassigned) -- this is what excludes it from the cyclic
+         * collector's is_not_green()/gc_possible_root() checks in
+         * garbage.cc. Do not let a future GC refactor change this color. */
         assert(gc_get_color(emptylist.v.list) == GC_GREEN);
 #endif
 
@@ -170,6 +183,13 @@ setremove(Var list, Var value)
 Var
 listset(Var list, Var value, int pos)
 {   /* consumes `list', `value' */
+    /* Unlike doinsert() below, this has no `list.v.list != emptylist.v.list'
+     * guard before its in-place mutation. That's currently safe only
+     * because both call sites (execute.cc's indexed-assignment opcode and
+     * bf_listset()) bounds-check pos against the list's length first, and
+     * emptylist's length is always 0 -- so pos can never be in range here
+     * when list is emptylist. Fragile by omission: don't add a new caller
+     * of listset() without preserving that bounds check. */
     Var _new = list;
 
     if (var_refcount(list) > 1) {
@@ -1752,6 +1772,19 @@ bf_remove_ansi(Var arglist, Byte next, void *vdata, Objid progr)
 #undef MARK_FOR_REMOVAL
 }
 
+#ifdef TRACE_REFCOUNT
+static package
+bf_debug_emptylist_refcount(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    free_var(arglist);
+
+    if (!is_wizard(progr))
+        return make_error_pack(E_PERM);
+
+    return make_var_pack(Var::new_int(var_refcount(emptylist)));
+}
+#endif
+
 void
 register_list(void)
 {
@@ -1778,6 +1811,9 @@ register_list(void)
     register_function("slice", 1, 3, bf_slice, TYPE_LIST, TYPE_ANY, TYPE_ANY);
     register_function("sort", 1, 4, bf_sort, TYPE_LIST, TYPE_LIST, TYPE_INT, TYPE_INT);
     register_function("all_members", 2, 2, bf_all_members, TYPE_ANY, TYPE_LIST);
+#ifdef TRACE_REFCOUNT
+    register_function("debug_emptylist_refcount", 0, 0, bf_debug_emptylist_refcount);
+#endif
 
     /* string */
     register_function("tostr", 0, -1, bf_tostr);

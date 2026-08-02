@@ -145,3 +145,72 @@ myfree(void *ptr, Memory_Type type)
 {
     free((char *) ptr - refcount_overhead(type));
 }
+
+#ifdef TRACE_REFCOUNT
+
+#ifndef TRACE_REFCOUNT_MAX_EVENTS
+#define TRACE_REFCOUNT_MAX_EVENTS 200000
+#endif
+
+#include <execinfo.h>
+#include <pthread.h>
+
+void *g_refcount_trace_target = nullptr;
+void *g_refcount_trace_target2 = nullptr;
+std::atomic<uint64_t> g_refcount_trace_count{0};
+
+static FILE *
+trace_refcount_log_file()
+{
+    static FILE *log_file = nullptr;
+    static char log_buf[65536];
+    static std::once_flag init;
+
+    std::call_once(init, []() {
+        log_file = fopen("refcount_trace.log", "w");
+        if (log_file)
+            setvbuf(log_file, log_buf, _IOFBF, sizeof(log_buf));
+    });
+
+    return log_file;
+}
+
+void
+trace_refcount_event(const void *ptr, const char *op, uint32_t new_value)
+{
+    static std::mutex log_mutex;
+
+    uint64_t seq = g_refcount_trace_count.fetch_add(1);
+    if (seq >= TRACE_REFCOUNT_MAX_EVENTS) {
+        if (seq == TRACE_REFCOUNT_MAX_EVENTS) {
+            std::lock_guard<std::mutex> lock(log_mutex);
+            FILE *f = trace_refcount_log_file();
+            if (f) {
+                fprintf(f, "CAPPED at %d events, further events dropped\n", TRACE_REFCOUNT_MAX_EVENTS);
+                fflush(f);
+            }
+        }
+        return;
+    }
+
+    /* Capture the raw backtrace (no symbolication, no allocation) before
+     * taking the lock, to keep the critical section as short as possible.
+     * Symbolicate offline later with: addr2line -f -C -e build/moo <addr>...
+     */
+    void *frames[32];
+    int nframes = backtrace(frames, 32);
+
+    std::lock_guard<std::mutex> lock(log_mutex);
+    FILE *f = trace_refcount_log_file();
+    if (!f)
+        return;
+
+    fprintf(f, "%llu thread=%lu ptr=%p op=%s refcount=%u",
+            (unsigned long long) seq, (unsigned long) pthread_self(), ptr, op, new_value);
+    for (int i = 0; i < nframes; ++i)
+        fprintf(f, " %p", frames[i]);
+    fprintf(f, "\n");
+    fflush(f);
+}
+
+#endif /* TRACE_REFCOUNT */

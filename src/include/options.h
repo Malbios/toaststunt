@@ -61,6 +61,18 @@
 /* #define LOG_GC_STATS */
 
 /******************************************************************************
+ * Define TRACE_REFCOUNT to log every addref()/delref() call against the
+ * canonical empty-list and empty-map singletons (backtrace included) to a
+ * debug log file, to help track down the "emptylist bandaid" refcounting
+ * bug (see the comment at the top of src/list.cc). Zero cost when undefined.
+ * TRACE_REFCOUNT_MAX_EVENTS caps how many events are captured before tracing
+ * stops, so a long soak run doesn't produce unbounded log volume.
+ */
+
+/* #define TRACE_REFCOUNT */
+/* #define TRACE_REFCOUNT_MAX_EVENTS 200000 */
+
+/******************************************************************************
  * The server normally forks a separate process to make database checkpoints;
  * the original process continues to service user commands as usual while the
  * new process writes out the contents of its copy of memory to a disk file.

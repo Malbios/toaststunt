@@ -44,8 +44,9 @@ include_directories(${CMAKE_BINARY_DIR})
 if(CMAKE_CONFIGURATION_TYPES)
     list(APPEND CMAKE_CONFIGURATION_TYPES Warn)
     list(APPEND CMAKE_CONFIGURATION_TYPES LeakCheck)
+    list(APPEND CMAKE_CONFIGURATION_TYPES ThreadCheck)
 else()
-    set(allowableBuildTypes Release Debug Warn LeakCheck)
+    set(allowableBuildTypes Release Debug Warn LeakCheck ThreadCheck)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "${allowableBuildTypes}")
     if(NOT CMAKE_BUILD_TYPE)
         set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
@@ -77,6 +78,15 @@ set(CMAKE_C_FLAGS_LEAKCHECK  "-O1 -g -fsanitize=address -fno-omit-frame-pointer 
 set(CMAKE_CXX_FLAGS_LEAKCHECK "${CMAKE_C_FLAGS_LEAKCHECK}")
 if(CMAKE_BUILD_TYPE MATCHES "LeakCheck")
     set(EXTRA_LINKER_FLAGS "-fsanitize=address")
+endif()
+
+# Check for data races: Minimal optimizations, debug enabled, and sanitize thread.
+# Cannot be combined with LeakCheck's -fsanitize=address in the same build --
+# these are two separate, mutually exclusive build types.
+set(CMAKE_C_FLAGS_THREADCHECK  "-O1 -g -fsanitize=thread -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_THREADCHECK "${CMAKE_C_FLAGS_THREADCHECK}")
+if(CMAKE_BUILD_TYPE MATCHES "ThreadCheck")
+    set(EXTRA_LINKER_FLAGS "-fsanitize=thread")
 endif()
 
 string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)

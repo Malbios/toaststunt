@@ -50,18 +50,42 @@ typedef struct var_metadata {
 #endif
 } var_metadata;
 
+#ifdef TRACE_REFCOUNT
+/* Debug instrumentation for the emptylist refcounting bandaid (see the
+ * comment at the top of src/list.cc). g_refcount_trace_target is the
+ * emptylist singleton's payload pointer, g_refcount_trace_target2 is the
+ * empty-map singleton's (a negative control -- it has the identical
+ * unconditional-addref/no-bandaid pattern but no known crash history).
+ * Both are set once each, from src/list.cc and src/map.cc respectively.
+ */
+extern void *g_refcount_trace_target;
+extern void *g_refcount_trace_target2;
+extern std::atomic<uint64_t> g_refcount_trace_count;
+extern void trace_refcount_event(const void *ptr, const char *op, uint32_t new_value);
+#endif
+
 static inline uint32_t
 addref(const void *ptr)
 {
     var_metadata *metadata = ((var_metadata*)ptr) - 1;
-    return ++(metadata->refcount);
+    uint32_t new_value = ++(metadata->refcount);
+#ifdef TRACE_REFCOUNT
+    if (__builtin_expect(ptr == g_refcount_trace_target || ptr == g_refcount_trace_target2, 0))
+        trace_refcount_event(ptr, "ADD", new_value);
+#endif
+    return new_value;
 }
 
 static inline uint32_t
 delref(const void *ptr)
 {
     var_metadata *metadata = ((var_metadata*)ptr) - 1;
-    return --(metadata->refcount);
+    uint32_t new_value = --(metadata->refcount);
+#ifdef TRACE_REFCOUNT
+    if (__builtin_expect(ptr == g_refcount_trace_target || ptr == g_refcount_trace_target2, 0))
+        trace_refcount_event(ptr, "DEL", new_value);
+#endif
+    return new_value;
 }
 
 static inline uint32_t

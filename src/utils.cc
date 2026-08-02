@@ -158,8 +158,17 @@ complex_free_var(Var v)
                 if (!gc_is_buffered(v.v.list))
                     myfree(v.v.list, M_LIST);
             }
-            else
+            else {
+#ifdef TRACE_REFCOUNT
+                /* The bandaid (see src/list.cc) means delref() is never
+                 * actually called on emptylist -- log that this free was
+                 * skipped instead, since real delref traffic can never
+                 * reveal it. */
+                if (v.v.list == emptylist.v.list)
+                    trace_refcount_event(v.v.list, "SKIPPED-DEL", refcount(v.v.list));
+#endif
                 gc_possible_root(v);
+            }
             break;
         case TYPE_MAP:
             if (delref(v.v.tree) == 0) {
@@ -226,6 +235,10 @@ complex_free_var(Var v)
         case TYPE_LIST:
             if (v.v.list != emptylist.v.list && delref(v.v.list) == 0)
                 destroy_list(v);
+#ifdef TRACE_REFCOUNT
+            else if (v.v.list == emptylist.v.list)
+                trace_refcount_event(v.v.list, "SKIPPED-DEL", refcount(v.v.list));
+#endif
             break;
         case TYPE_MAP:
             if (delref(v.v.tree) == 0)
