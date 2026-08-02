@@ -770,8 +770,11 @@ bf_listset(Var arglist, Byte next, void *vdata, Objid progr)
 
     free_var(arglist);
 
-    if (pos <= 0 || pos > listlength(lst))
+    if (pos <= 0 || pos > listlength(lst)) {
+        free_var(lst);
+        free_var(elt);
         return make_error_pack(E_RANGE);
+    }
 
     r = listset(lst, elt, pos);
 
