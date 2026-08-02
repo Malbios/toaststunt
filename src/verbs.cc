@@ -588,6 +588,27 @@ bf_respond_to(Var arglist, Byte next, void *data, Objid progr)
     return make_var_pack(r);
 }
 
+static package
+bf_verb_callable(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    Var object = arglist.v.list[1];
+    const char *verb = arglist.v.list[2].v.str;
+
+    if (!object.is_object()) {
+        free_var(arglist);
+        return make_error_pack(E_TYPE);
+    } else if (!is_valid(object)) {
+        free_var(arglist);
+        return make_error_pack(E_INVARG);
+    }
+
+    db_verb_handle h = db_find_callable_verb(object, verb);
+
+    free_var(arglist);
+
+    return make_var_pack(Var::new_int(h.ptr ? 1 : 0));
+}
+
 static int
 all_strings(Var arglist)
 {
@@ -675,6 +696,8 @@ register_verbs(void)
     register_function("set_verb_code", 3, 3, bf_set_verb_code,
                       TYPE_ANY, TYPE_ANY, TYPE_LIST);
     register_function("respond_to", 2, 2, bf_respond_to,
+                      TYPE_ANY, TYPE_STR);
+    register_function("verb_callable", 2, 2, bf_verb_callable,
                       TYPE_ANY, TYPE_STR);
     register_function("eval", 1, -1, bf_eval, TYPE_STR);
 }
