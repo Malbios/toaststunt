@@ -1215,11 +1215,12 @@ db_change_location(Objid oid, Objid new_location, int position)
             objects[oid]->last_move = new_map();
         }
 
-        Var last_move = objects[oid]->last_move;
-        last_move = mapinsert(last_move, var_ref(time_key), Var::new_int(time(nullptr)));
-        last_move = mapinsert(last_move, var_ref(source_key), Var::new_obj(old_location));
+        Var new_last_move = var_ref(objects[oid]->last_move);
+        new_last_move = mapinsert(new_last_move, var_ref(time_key), Var::new_int(time(nullptr)));
+        new_last_move = mapinsert(new_last_move, var_ref(source_key), Var::new_obj(old_location));
 
-        objects[oid]->last_move = last_move;
+        free_var(objects[oid]->last_move);
+        objects[oid]->last_move = new_last_move;
     }
 
 }

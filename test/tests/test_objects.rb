@@ -2012,6 +2012,61 @@ class TestObject < Test::Unit::TestCase
     end
   end
 
+  # Regression test for a leak in db_change_location() (src/db_objects.cc):
+  # move() rebuilt .last_move via a plain struct copy of the object's own
+  # field rather than var_ref(), so whenever something else held an extra
+  # reference to .last_move (e.g. a MOO variable that read it earlier), the
+  # field's own share of the refcount was silently dropped without a
+  # free_var() when the field got overwritten -- a permanent, ASan-detected
+  # leak of the old map's rbtree nodes. This can't detect the leak itself
+  # (it's invisible to any functional assertion and to the cyclic GC), but
+  # it exercises the exact trigger condition to guard against a wrong fix
+  # (e.g. one that corrupts the held snapshot or double-frees).
+  #
+  # The trigger requires a MOO variable to hold a reference to .last_move
+  # (raising its refcount above 1) across a *subsequent* move() on the same
+  # object within the same task -- each Ruby-side command()/get() call is
+  # its own separate MOO task whose locals are freed when it returns, so
+  # this has to be one single MOO command doing the loop itself, not a
+  # Ruby-side loop of separate move()/get() calls.
+  def test_that_repeated_moves_do_not_corrupt_an_outstanding_last_move_reference
+    run_test_as('wizard') do
+      a = create(NOTHING)
+      b = create(NOTHING)
+      c = create(NOTHING)
+      o = create(NOTHING)
+
+      move(o, a)
+
+      code = %Q(
+        saved = #{o}.last_move;
+        if (saved["source"] != #-1)
+          return {0, "initial source wrong", saved["source"]};
+        endif
+        previous = #{a};
+        dest = #{b};
+        other = #{c};
+        for i in [1..500]
+          move(#{o}, dest);
+          current = #{o}.last_move;
+          if (current["source"] != previous)
+            return {0, "source mismatch at iteration", i, current["source"], previous};
+          endif
+          previous = dest;
+          temp = dest;
+          dest = other;
+          other = temp;
+        endfor
+        if (saved["source"] != #-1)
+          return {0, "held snapshot corrupted by later moves", saved["source"]};
+        endif
+        return {1};
+      ).gsub(/\s+/, ' ').strip
+
+      assert_equal 1, simplify(command(";#{code}"))
+    end
+  end
+
   private
 
   def kahuna(parent, location, name)
