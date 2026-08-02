@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "collection.h"
 #include "config.h"
 #include "db.h"
 #include "db_io.h"
@@ -152,7 +153,7 @@ complex_free_var(Var v)
                 free_str(v.v.str);
             break;
         case TYPE_LIST:
-            if (v.v.list != emptylist.v.list && delref(v.v.list) == 0) {
+            if (!is_shared_empty(v) && delref(v.v.list) == 0) {
                 destroy_list(v);
                 gc_set_color(v.v.list, GC_BLACK);
                 if (!gc_is_buffered(v.v.list))
@@ -162,7 +163,7 @@ complex_free_var(Var v)
                 gc_possible_root(v);
             break;
         case TYPE_MAP:
-            if (v.v.tree != emptymap.v.tree && delref(v.v.tree) == 0) {
+            if (!is_shared_empty(v) && delref(v.v.tree) == 0) {
                 destroy_map(v);
                 gc_set_color(v.v.tree, GC_BLACK);
                 if (!gc_is_buffered(v.v.tree))
@@ -224,11 +225,11 @@ complex_free_var(Var v)
                 free_str(v.v.str);
             break;
         case TYPE_LIST:
-            if (v.v.list != emptylist.v.list && delref(v.v.list) == 0)
+            if (!is_shared_empty(v) && delref(v.v.list) == 0)
                 destroy_list(v);
             break;
         case TYPE_MAP:
-            if (v.v.tree != emptymap.v.tree && delref(v.v.tree) == 0)
+            if (!is_shared_empty(v) && delref(v.v.tree) == 0)
                 destroy_map(v);
             break;
         case TYPE_ITER:

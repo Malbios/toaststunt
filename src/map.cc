@@ -32,6 +32,7 @@
 
 #include <string.h>
 
+#include "collection.h"
 #include "functions.h"
 #include "list.h"
 #include "log.h"
@@ -697,7 +698,7 @@ mapinsert(Var map, Var key, Var value)
     /* Bandaid: mirrors doinsert()'s guard in list.cc -- without it, an
      * in-place mutation below could corrupt the shared empty-map singleton
      * for the whole server if its refcount ever happened to be exactly 1. */
-    if (map.v.tree == emptymap.v.tree || var_refcount(map) > 1) {
+    if (is_shared_empty(map) || var_refcount(map) > 1) {
         _new = map_dup(map);
         free_var(map);
     }
@@ -1066,7 +1067,11 @@ bf_mapdelete(Var arglist, Byte next, void *vdata, Objid progr)
     Var map = arglist.v.list[1];
     Var key_arg = arglist.v.list[2];
 
-    r = var_refcount(map) == 1 ? var_ref(map) : map_dup(map);
+    /* Bandaid: mirrors mapinsert()'s guard -- rberase() always fails first on
+     * an empty tree today, so this is currently unreachable on the shared
+     * empty-map singleton, but a future change to that invariant shouldn't
+     * silently reintroduce the same corruption class. */
+    r = (!is_shared_empty(map) && var_refcount(map) == 1) ? var_ref(map) : map_dup(map);
 
 #ifdef MEMO_SIZE
     /* reset the memoized size */
