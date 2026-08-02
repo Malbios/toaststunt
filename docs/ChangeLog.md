@@ -25,6 +25,7 @@
 - Add a `waifs([class])` builtin that returns all currently-live waif instances, optionally filtered to a single class. Wizards see every matching waif; non-wizards only see waifs they own.
 - The trailing semicolon on the last statement in a block (an expression, `break`, `continue`, or `return`) is now optional when immediately followed by a block-closing keyword (`endif`, `endfor`, `endwhile`, `endfork`, `endtry`, `else`, `elseif`, `except`, `finally`) or the end of the program.
 - Add a `listget(list, index [, default])` function to safely index a list, returning a default value (or 0) instead of raising E_RANGE when the index is out of bounds.
+- Add `+` and `-` operators for maps: `map + map` merges two maps with the right-hand side winning on key collision, `map - map` returns a copy of the left map with the right map's keys removed.
 
 ## 2.7.3 (Jun 20, 2025)
 ### Bug Fixes

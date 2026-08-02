@@ -897,6 +897,55 @@ maprange(Var map, rbtrav *from, rbtrav *to)
     return _new;
 }
 
+/* Returns a new map with every key/value from `second' merged into a copy
+ * of `first'; on key collision, `second's value wins.
+ */
+Var
+mapconcat(Var first, Var second)
+{   /* consumes `first', `second' */
+    Var _new = map_dup(first);
+    rbtrav trav;
+    const rbnode *pnode;
+
+    for (pnode = rbtfirst(&trav, second.v.tree); pnode; pnode = rbtnext(&trav))
+        _new = mapinsert(_new, var_ref(pnode->key), var_ref(pnode->value));
+
+    free_var(first);
+    free_var(second);
+
+#ifdef ENABLE_GC
+    gc_set_color(_new.v.tree, GC_YELLOW);
+#endif
+
+    return _new;
+}
+
+/* Returns a copy of `first' with every key present in `second' removed.
+ * Keys in `second' that don't exist in `first' are ignored.
+ */
+Var
+mapsubtract(Var first, Var second)
+{   /* consumes `first', `second' */
+    Var _new = map_dup(first);
+    rbtrav trav;
+    rbnode node;
+    const rbnode *pnode;
+
+    for (pnode = rbtfirst(&trav, second.v.tree); pnode; pnode = rbtnext(&trav)) {
+        node.key = pnode->key; /* borrowed -- rberase only compares, never frees */
+        rberase(_new.v.tree, &node);
+    }
+
+    free_var(first);
+    free_var(second);
+
+#ifdef ENABLE_GC
+    gc_set_color(_new.v.tree, GC_YELLOW);
+#endif
+
+    return _new;
+}
+
 /* Replaces the specified range in the map.  `from' and `to' must be
  * valid iterators for the map or the behavior is unspecified.  The
  * new map is placed in `new' (`new' is first freed).  Returns

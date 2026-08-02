@@ -35,6 +35,8 @@ extern void destroy_map(Var map);
 extern Var map_dup(Var map);
 
 extern Var mapinsert(Var map, Var key, Var value);
+extern Var mapconcat(Var first, Var second);
+extern Var mapsubtract(Var first, Var second);
 extern const rbnode *maplookup(Var map, Var key, Var *value, int case_matters);
 extern const rbnode *mapstrlookup(Var map, const char *key, Var *value, int case_matters);
 extern int mapseek(Var map, Var key, Var *iter, int case_matters);
