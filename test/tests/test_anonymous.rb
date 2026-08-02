@@ -784,4 +784,80 @@ class TestAnonymous < Test::Unit::TestCase
     end
   end
 
+  ## anons()
+
+  # Anonymous object values have no re-parseable MOO literal syntax, so they
+  # can never be captured in Ruby via simplify() and re-interpolated into a
+  # later command the way object numbers can -- every anon created below is
+  # stashed in a persistent property from the same command that creates it
+  # (never returned to Ruby), and only ever manipulated from further MOO
+  # code, mirroring the existing "player.stash" pattern this file's other
+  # anonymous-object tests already use.
+  #
+  # Filtered by parent throughout (rather than an unfiltered anons() count),
+  # so these tests aren't sensitive to anon instances left behind by other
+  # tests in this file -- each test uses its own freshly-created parent(s),
+  # mirroring how the waifs() tests in test_waif.rb always filter by class.
+  def anons_count(parent)
+    simplify(command(%Q|; return length(anons(#{parent}));|))
+  end
+
+  def test_that_anons_filters_by_parent
+    run_test_as('wizard') do
+      p1 = create(:nothing)
+      p2 = create(:nothing)
+      assert_equal 0, anons_count(p1)
+      assert_equal 0, anons_count(p2)
+      add_property(player, 'stash', {}, [player, ''])
+      simplify(command(%Q|; player.stash["a"] = create(#{p1}, 1); player.stash["b"] = create(#{p1}, 1); player.stash["c"] = create(#{p2}, 1); return 1;|))
+      assert_equal 2, anons_count(p1)
+      assert_equal 1, anons_count(p2)
+      simplify(command("; player.stash = 0; return 1;"))
+    end
+  end
+
+  def test_that_anons_deduplicates_a_multi_parent_instance
+    run_test_as('wizard') do
+      p1 = create(:nothing)
+      p2 = create(:nothing)
+      before = simplify(command("; return length(anons());"))
+      add_property(player, 'stash', 0, [player, ''])
+      simplify(command(%Q|; player.stash = create({#{p1}, #{p2}}, 1); return 1;|))
+      after = simplify(command("; return length(anons());"))
+      assert_equal 1, after - before
+      assert_equal 1, anons_count(p1)
+      assert_equal 1, anons_count(p2)
+      simplify(command("; player.stash = 0; return 1;"))
+    end
+  end
+
+  def test_that_anons_shows_only_owned_anons_to_non_wizards
+    p = owner = nil
+    run_test_as('programmer') do
+      p = create(:nothing)
+      owner = player
+      add_property(player, 'stash', 0, [player, ''])
+      simplify(command(%Q|; player.stash = create(#{p}, 1); return 1;|))
+      assert_equal 1, anons_count(p)
+    end
+    run_test_as('programmer') do
+      assert_equal 0, anons_count(p)
+    end
+    run_test_as('wizard') do
+      assert_equal 1, anons_count(p)
+      simplify(command(%Q|; #{owner}.stash = 0; return 1;|))
+    end
+  end
+
+  def test_that_anons_no_longer_shows_a_recycled_anon
+    run_test_as('wizard') do
+      p = create(:nothing)
+      add_property(player, 'stash', 0, [player, ''])
+      simplify(command(%Q|; player.stash = create(#{p}, 1); return 1;|))
+      assert_equal 1, anons_count(p)
+      simplify(command("; player.stash = 0; return 1;"))
+      assert_equal 0, anons_count(p)
+    end
+  end
+
 end

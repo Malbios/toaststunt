@@ -1370,6 +1370,23 @@ bf_owned_objects(Var arglist, Byte next, void *vdata, Objid progr)
     return make_var_pack(ret);
 }
 
+/* Return a list of all currently-live anonymous object instances,
+ * optionally filtered to one direct parent. Wizards see every matching
+ * instance; non-wizards only see instances they own. The natural
+ * companion to waifs().
+ */
+static package
+bf_anons(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    bool filter = (arglist.v.list[0].v.num == 1);
+    Objid parent = filter ? arglist.v.list[1].v.obj : NOTHING;
+    free_var(arglist);
+
+    Var ret = dbpriv_anons(parent, filter, progr, is_wizard(progr));
+
+    return make_var_pack(ret);
+}
+
 Var nothing;        /* useful constant */
 Var clear;          /* useful constant */
 Var none;           /* useful constant */
@@ -1422,6 +1439,7 @@ register_objects(void)
     register_function("recycled_objects", 0, 0, bf_recycled_objects);
     register_function("next_recycled_object", 0, 1, bf_next_recycled_object, TYPE_OBJ);
     register_function("owned_objects", 1, 1, bf_owned_objects, TYPE_OBJ);
+    register_function("anons", 0, 1, bf_anons, TYPE_OBJ);
 #ifndef NDEBUG
     register_function("anon", 0, 2, bf_anon, TYPE_LIST, TYPE_ANY);
 #endif
