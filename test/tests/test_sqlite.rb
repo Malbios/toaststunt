@@ -51,4 +51,46 @@ class TestSqlite < Test::Unit::TestCase
     end
   end
 
+  # Regression tests for sanitize_string_for_moo()'s SQLITE_SANITIZE_STRINGS
+  # handling: newlines become tabs on every string result, and
+  # sqlite_execute()'s path used to sanitize the same string twice
+  # (directly, then again inside string_to_moo_type()) -- harmless since
+  # the substitution is idempotent, but confirms the dedup didn't change
+  # the observable result.
+
+  def test_that_sanitize_strings_replaces_newlines_with_tabs_via_sqlite_execute
+    run_test_as('wizard') do
+      # options = PARSE_TYPES(2) | PARSE_OBJECTS(4) | SANITIZE_STRINGS(8)
+      db = simplify(command %Q|; set_thread_mode(0); return sqlite_open(":memory:", 14);|)
+      command %Q|; set_thread_mode(0); sqlite_execute(#{db}, "CREATE TABLE t (a TEXT);", {});|
+      command %Q|; set_thread_mode(0); sqlite_execute(#{db}, "INSERT INTO t VALUES (?);", {"line1" + chr(10) + "line2"});|
+
+      assert_equal "line1\tline2", simplify(command %Q|; set_thread_mode(0); return sqlite_execute(#{db}, "SELECT a FROM t;", {});|)
+      assert_equal 0, simplify(command %Q|; set_thread_mode(0); return sqlite_close(#{db});|)
+    end
+  end
+
+  def test_that_sanitize_strings_replaces_newlines_with_tabs_via_sqlite_query
+    run_test_as('wizard') do
+      db = simplify(command %Q|; set_thread_mode(0); return sqlite_open(":memory:", 14);|)
+      command %Q|; set_thread_mode(0); sqlite_execute(#{db}, "CREATE TABLE t (a TEXT);", {});|
+      command %Q|; set_thread_mode(0); sqlite_execute(#{db}, "INSERT INTO t VALUES (?);", {"line1" + chr(10) + "line2"});|
+
+      assert_equal "line1\tline2", simplify(command %Q|; return sqlite_query(#{db}, "SELECT a FROM t;");|)
+      assert_equal 0, simplify(command %Q|; set_thread_mode(0); return sqlite_close(#{db});|)
+    end
+  end
+
+  def test_that_sanitize_strings_leaves_strings_without_newlines_unchanged
+    run_test_as('wizard') do
+      db = simplify(command %Q|; set_thread_mode(0); return sqlite_open(":memory:", 14);|)
+      command %Q|; set_thread_mode(0); sqlite_execute(#{db}, "CREATE TABLE t (a TEXT);", {});|
+      command %Q|; set_thread_mode(0); sqlite_execute(#{db}, "INSERT INTO t VALUES (?);", {"no newline here"});|
+
+      assert_equal "no newline here", simplify(command %Q|; set_thread_mode(0); return sqlite_execute(#{db}, "SELECT a FROM t;", {});|)
+      assert_equal "no newline here", simplify(command %Q|; return sqlite_query(#{db}, "SELECT a FROM t;");|)
+      assert_equal 0, simplify(command %Q|; set_thread_mode(0); return sqlite_close(#{db});|)
+    end
+  end
+
 end
