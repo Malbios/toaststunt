@@ -162,7 +162,7 @@ complex_free_var(Var v)
                 gc_possible_root(v);
             break;
         case TYPE_MAP:
-            if (delref(v.v.tree) == 0) {
+            if (v.v.tree != emptymap.v.tree && delref(v.v.tree) == 0) {
                 destroy_map(v);
                 gc_set_color(v.v.tree, GC_BLACK);
                 if (!gc_is_buffered(v.v.tree))
@@ -228,7 +228,7 @@ complex_free_var(Var v)
                 destroy_list(v);
             break;
         case TYPE_MAP:
-            if (delref(v.v.tree) == 0)
+            if (v.v.tree != emptymap.v.tree && delref(v.v.tree) == 0)
                 destroy_map(v);
             break;
         case TYPE_ITER:

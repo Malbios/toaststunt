@@ -581,6 +581,13 @@ rbtprev(rbtrav *trav)
 
 /********/
 
+/* Mirrors the emptylist bandaid (see the comment at the top of list.cc):
+ * exposing this as a global lets complex_free_var() skip freeing it if its
+ * refcount would otherwise hit zero, the same protection emptylist already
+ * has. Without this, the empty map has no defense against the same
+ * premature-free crash class the list bandaid exists to prevent. */
+Var emptymap;
+
 static Var
 empty_map(void)
 {
@@ -599,20 +606,19 @@ empty_map(void)
 Var
 new_map(void)
 {
-    static Var map;
     static std::once_flag map_init;
 
     std::call_once(map_init, []() {
-        map = empty_map();
+        emptymap = empty_map();
     });
 
 #ifdef ENABLE_GC
-    assert(gc_get_color(map.v.tree) == GC_GREEN);
+    assert(gc_get_color(emptymap.v.tree) == GC_GREEN);
 #endif
 
-    addref(map.v.tree);
+    addref(emptymap.v.tree);
 
-    return map;
+    return emptymap;
 }
 
 /* called from utils.c */
@@ -688,7 +694,10 @@ mapinsert(Var map, Var key, Var value)
 
     Var _new = map;
 
-    if (var_refcount(map) > 1) {
+    /* Bandaid: mirrors doinsert()'s guard in list.cc -- without it, an
+     * in-place mutation below could corrupt the shared empty-map singleton
+     * for the whole server if its refcount ever happened to be exactly 1. */
+    if (map.v.tree == emptymap.v.tree || var_refcount(map) > 1) {
         _new = map_dup(map);
         free_var(map);
     }
