@@ -34,9 +34,24 @@
 #include "log.h"        // errlog
 #include "map.h"
 #include <unordered_map>
+#include <vector>
+#include <algorithm>
 
 static unsigned long waif_count = 0;
 static std::unordered_map<Objid, unsigned int> waif_class_count;
+/* Raw-pointer registry of live waif instances, bucketed by class, kept in
+ * sync with waif_class_count at the same four sites (new_waif/
+ * invalidate_waif/free_waif/db-load). Raw pointers deliberately -- this
+ * must never hold a MOO-level reference, or it would interfere with
+ * refcounting/GC. Bucketing is by the raw Objid in Waif::_class, which is
+ * only corrected lazily on next access (update_waif_propdefs); a waif
+ * whose class was destroyed and never touched again stays in its old
+ * bucket rather than NOTHING's until accessed. If that id is later reused,
+ * a stale dormant waif could cause waif_class_holds_live_value() to
+ * over-report -- always in the safe (more conservative) direction, never
+ * the other way. Same imprecision already exists in waif_class_count.
+ */
+static std::unordered_map<Objid, std::vector<Waif *>> waif_instances_by_class;
 std::unordered_map<Waif *, bool> destroyed_waifs;
 
 #define PROP_MAPPED(Mmap, Mbit) ((Mmap)[(Mbit) / 32] & (1 << ((Mbit) % 32)))
@@ -290,6 +305,7 @@ new_waif(Objid _class, Objid owner)
     res.v.waif->propvals = alloc_waif_propvals(res.v.waif, 1);
     ++waif_count;
     waif_class_count[_class]++;
+    waif_instances_by_class[_class].push_back(res.v.waif);
 
     return res;
 }
@@ -348,6 +364,34 @@ found:
     }
 }
 
+/* Does any live waif instance of `cls' hold a non-clear (explicitly set)
+ * value for `propname'? Used to decide whether a waif-scoped property can
+ * be safely renamed away from waif scope (see db_rename_propdef()) --
+ * doing so collapses what may be many independent per-instance values
+ * into a single shared, definer-owned regular property, so any non-clear
+ * value found here would otherwise be silently discarded.
+ *
+ * Deliberately does not call update_waif_propdefs() first: any value
+ * already sitting in propvals is real data the pending rename would
+ * discard regardless of per-waif sync state, and update_waif_propdefs()
+ * can itself discard values as a side effect (the very mechanism behind
+ * the narrower, out-of-scope same-scope stale-snapshot issue) -- which
+ * would be a surprising thing for a read-only safety check to trigger.
+ */
+bool
+waif_class_holds_live_value(Objid cls, const char *propname)
+{
+    auto it = waif_instances_by_class.find(cls);
+    if (it == waif_instances_by_class.end())
+        return false;
+
+    for (Waif *w : it->second)
+        if (find_propval_offset(w, propname, nullptr) >= 0)
+            return true;
+
+    return false;
+}
+
 /* We want to write into an unmapped propval, so map it and adjust the
  * propval array accordingly.
  */
@@ -385,6 +429,20 @@ alloc_propval_offset(Waif *w, int idx)
 }
 
 static void
+remove_waif_instance(Objid cls, Waif *waif)
+{
+    auto it = waif_instances_by_class.find(cls);
+    if (it == waif_instances_by_class.end())
+        return;
+    auto& vec = it->second;
+    auto pos = std::find(vec.begin(), vec.end(), waif);
+    if (pos != vec.end())
+        vec.erase(pos);
+    if (vec.empty())
+        waif_instances_by_class.erase(it);
+}
+
+static void
 invalidate_waif(Waif *waif)
 {
     int cnt;
@@ -400,8 +458,10 @@ invalidate_waif(Waif *waif)
     waif_class_count[waif->_class]--;
     if (waif_class_count[waif->_class] <= 0)
         waif_class_count.erase(waif->_class);
+    remove_waif_instance(waif->_class, waif);
     waif->_class = NOTHING;
     waif_class_count[waif->_class]++;
+    waif_instances_by_class[waif->_class].push_back(waif);
 }
 
 /* When class object properties change, waifs are not immediately updated.
@@ -582,6 +642,7 @@ free_waif(Waif *waif)
     waif_class_count[waif->_class]--;
     if (waif_class_count[waif->_class] <= 0)
         waif_class_count.erase(waif->_class);
+    remove_waif_instance(waif->_class, waif);
 
     /* assert(refcount(waif) == 0) */
     cnt = count_waif_propvals(waif);
@@ -635,11 +696,51 @@ bf_waif_stats(Var arglist, Byte next, void *vdata, Objid progr)
     return make_var_pack(r);
 }
 
+/* Returns all currently-live waif instances, optionally filtered to a
+ * single class. Wizards see every matching waif; non-wizards only see
+ * waifs they own, mirroring queued_tasks()'s show_all/own-tasks-only
+ * split. The registry (waif_instances_by_class) holds raw, non-
+ * refcounted pointers, so each match must be var_ref()'d before being
+ * handed back as a real Var.
+ */
+static package
+bf_waifs(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    int nargs = arglist.v.list[0].v.num;
+    bool filter = (nargs == 1);
+    Objid cls = filter ? arglist.v.list[1].v.obj : NOTHING;
+
+    free_var(arglist);
+
+    bool show_all = is_wizard(progr);
+    std::vector<Waif *> matches;
+
+    if (filter) {
+        auto it = waif_instances_by_class.find(cls);
+        if (it != waif_instances_by_class.end())
+            for (Waif *w : it->second)
+                if (show_all || w->owner == progr)
+                    matches.push_back(w);
+    } else {
+        for (auto& bucket : waif_instances_by_class)
+            for (Waif *w : bucket.second)
+                if (show_all || w->owner == progr)
+                    matches.push_back(w);
+    }
+
+    Var r = new_list(matches.size());
+    for (size_t i = 0; i < matches.size(); ++i)
+        r.v.list[i + 1] = var_ref(Var::new_waif(matches[i]));
+
+    return make_var_pack(r);
+}
+
 void
 register_waif()
 {
     register_function("new_waif", 0, 0, bf_new_waif);
     register_function("waif_stats", 0, 0, bf_waif_stats);
+    register_function("waifs", 0, 1, bf_waifs, TYPE_OBJ);
 }
 
 /* Waif property permissions are derived from the class object's property
@@ -1003,6 +1104,7 @@ read_waif()
         res.v.waif->map[i] = 0;
     propdefs_length = dbio_read_num();
     waif_class_count[res.v.waif->_class]++;
+    waif_instances_by_class[res.v.waif->_class].push_back(w);
 
     /* Read propvals into the `packable' array until we run out of
      * mappable props, then allocate the finished value array and

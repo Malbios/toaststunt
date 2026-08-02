@@ -323,6 +323,119 @@ class TestWaif < Test::Unit::TestCase
     end
   end
 
+  def waifs_count(cls)
+    simplify(command(%Q|; return length(waifs(#{cls}));|))
+  end
+
+  def test_that_waifs_filters_by_class
+    run_test_as('wizard') do
+      a = create(:waif)
+      b = create(:waif)
+      add_property(player, 'stash', {}, [player, ''])
+      assert_equal 0, waifs_count(a)
+      assert_equal 0, waifs_count(b)
+      simplify(command(%Q|; player.stash["a1"] = #{a}:new(); player.stash["a2"] = #{a}:new(); player.stash["b1"] = #{b}:new(); return 1;|))
+      assert_equal 2, waifs_count(a)
+      assert_equal 1, waifs_count(b)
+      simplify(command(%Q|; player.stash = 0; return 1;|))
+    end
+  end
+
+  def test_that_waifs_shows_only_owned_waifs_to_non_wizards
+    a = owner = nil
+    run_test_as('programmer') do
+      a = create(:waif)
+      owner = player
+      set(a, 'r', 1)
+      add_property(player, 'stash', {}, [player, ''])
+      simplify(command(%Q|; player.stash["w"] = #{a}:new(); return 1;|))
+      assert_equal 1, waifs_count(a)
+    end
+    run_test_as('programmer') do
+      assert_equal 0, waifs_count(a)
+    end
+    run_test_as('wizard') do
+      assert_equal 1, waifs_count(a)
+      simplify(command(%Q|; #{owner}.stash = 0; return 1;|))
+    end
+  end
+
+  def test_that_waifs_no_longer_shows_a_recycled_waif
+    run_test_as('wizard') do
+      a = create(:waif)
+      add_property(player, 'stash', {}, [player, ''])
+      simplify(command(%Q|; player.stash["w"] = #{a}:new(); return 1;|))
+      assert_equal 1, waifs_count(a)
+      simplify(command(%Q|; player.stash["w"] = 0; return 1;|))
+      assert_equal 0, waifs_count(a)
+    end
+  end
+
+  # Regression tests for the waif_rename_propdef property-loss bug: renaming
+  # a waif-scoped property (":foo") away from waif scope ("foo") used to
+  # silently discard every live waif's per-instance value for it, since a
+  # regular property has exactly one shared, definer-owned value with no
+  # room for N independent per-instance ones. set_property_info() now
+  # refuses the rename (E_INVARG) specifically when it would actually
+  # discard a live, non-clear value -- not merely whenever the class has
+  # any waif instance at all, which is why the "no live value" tests below
+  # (an instance exists but was never touched) are the important ones, not
+  # just the "no instances at all" case.
+
+  def test_that_demoting_a_waif_property_with_a_live_value_is_rejected
+    run_test_as('wizard') do
+      a = create(:waif)
+      add_property(a, ':foo', 0, [player, ''])
+      add_property(player, 'stash', {}, [player, ''])
+      simplify(command(%Q|; w = #{a}:new(); w.foo = "real value"; player.stash["w"] = w; return 1;|))
+
+      assert_equal E_INVARG, simplify(command(%Q|; return set_property_info(#{a}, ":foo", {player, "", "foo"});|))
+      assert_equal 'real value', simplify(command(%Q|; return player.stash["w"].foo;|))
+      assert_equal [player, ''], property_info(a, ':foo')
+      simplify(command(%Q|; player.stash = 0; return 1;|))
+    end
+  end
+
+  def test_that_demoting_a_waif_property_succeeds_with_no_instances
+    run_test_as('wizard') do
+      a = create(:waif)
+      add_property(a, ':foo', 0, [player, ''])
+
+      assert_not_equal E_INVARG, simplify(command(%Q|; return set_property_info(#{a}, ":foo", {player, "", "foo"});|))
+      assert_equal [player, ''], property_info(a, 'foo')
+      assert_equal E_PROPNF, property_info(a, ':foo')
+    end
+  end
+
+  def test_that_demoting_a_waif_property_succeeds_when_no_instance_holds_a_value
+    run_test_as('wizard') do
+      a = create(:waif)
+      add_property(a, ':foo', 'default', [player, ''])
+      add_property(player, 'stash', {}, [player, ''])
+      # Instance exists, but .foo is never explicitly set -- stays clear.
+      simplify(command(%Q|; player.stash["w"] = #{a}:new(); return 1;|))
+
+      assert_not_equal E_INVARG, simplify(command(%Q|; return set_property_info(#{a}, ":foo", {player, "", "foo"});|))
+      assert_equal [player, ''], property_info(a, 'foo')
+      simplify(command(%Q|; player.stash = 0; return 1;|))
+    end
+  end
+
+  def test_that_promoting_a_regular_property_to_waif_scope_still_works
+    run_test_as('wizard') do
+      a = create(:waif)
+      add_property(a, 'foo', 'shared default', [player, ''])
+
+      assert_not_equal E_INVARG, simplify(command(%Q|; return set_property_info(#{a}, "foo", {player, "", ":foo"});|))
+      assert_equal [player, ''], property_info(a, ':foo')
+
+      add_property(player, 'stash', {}, [player, ''])
+      simplify(command(%Q|; player.stash["w"] = #{a}:new(); return 1;|))
+      assert_equal 'shared default', simplify(command(%Q|; return player.stash["w"].foo;|))
+      simplify(command(%Q|; player.stash = 0; return 1;|))
+    end
+  end
+
   def test_setting_and_getting_nested_waif_map_indexes
     run_test_as('programmer') do
       # Create a waif class with a map property

@@ -55,5 +55,6 @@ extern void write_waif(Var);
 extern Var read_waif();
 extern void free_waif_propdefs(WaifPropdefs *);
 extern void waif_rename_propdef(Object *, const char *, const char *);
+extern bool waif_class_holds_live_value(Objid, const char *);
 
 #endif /* WAIF_h */
