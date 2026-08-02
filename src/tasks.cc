@@ -679,6 +679,14 @@ my_error(void *data, const char *msg)
     s->nerrors++;
 }
 
+static void
+my_warning(void *data, const char *msg)
+{
+    struct task_state *s = (task_state *)data;
+
+    notify(s->player, msg);
+}
+
 static int
 my_getc(void *data)
 {
@@ -691,7 +699,7 @@ my_getc(void *data)
 }
 
 static Parser_Client client =
-{my_error, nullptr, my_getc};
+{my_error, my_warning, my_getc};
 
 static void
 end_programming(tqueue * tq)

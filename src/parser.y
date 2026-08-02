@@ -50,6 +50,7 @@ static DB_Version       language_version;
 
 static void     error(const char *, const char *);
 static void     warning(const char *, const char *);
+static void     check_not_assignment(Expr *);
 static int      find_id(char *name);
 static void     yyerror(const char *s);
 static int      yylex(void);
@@ -139,6 +140,7 @@ statement:
 	  tIF '(' expr ')' statements_end elseifs elsepart tENDIF
 		{
 
+		    check_not_assignment($3);
 		    $$ = alloc_stmt(STMT_COND);
 		    $$->s.cond.arms = alloc_cond_arm($3, $5);
 		    $$->s.cond.arms->next = $6;
@@ -191,6 +193,7 @@ statement:
 		}
 	  statements_end tENDWHILE
 		{
+		    check_not_assignment($3);
 		    $$ = alloc_stmt(STMT_WHILE);
 		    $$->s.loop.id = -1;
 		    $$->s.loop.condition = $3;
@@ -203,6 +206,7 @@ statement:
 		}
 	  statements_end tENDWHILE
 		{
+		    check_not_assignment($4);
 		    $$ = alloc_stmt(STMT_WHILE);
 		    $$->s.loop.id = find_id($2);
 		    $$->s.loop.condition = $4;
@@ -352,6 +356,7 @@ elseifs:
 		{ $$ = 0; }
 	| elseifs tELSEIF '(' expr ')' statements_end
 		{
+		    check_not_assignment($4);
 		    Cond_Arm *this_arm = alloc_cond_arm($4, $6);
 		    
 		    if ($1) {
@@ -711,6 +716,8 @@ expr:
 		}
 	| '`' expr '!' codes default '\''
 		{
+		    if ($4 == 0)
+			warning("Bare `ANY' in inline catch swallows all errors, including bugs; consider listing specific error codes", 0);
 		    $$ = alloc_expr(EXPR_CATCH);
 		    $$->e._catch._try = $2;
 		    $$->e._catch.codes = $4;
@@ -887,6 +894,13 @@ warning(const char *s, const char *t)
 	(*(client.warning))(client_data, fmt_error(s, t));
     else
 	error(s, t);
+}
+
+static void
+check_not_assignment(Expr *e)
+{
+    if (e->kind == EXPR_ASGN)
+	warning("Assignment used as a condition; did you mean `=='?", 0);
 }
 
 static int unget_buffer[5], unget_count;
@@ -1366,6 +1380,17 @@ my_error(void *data, const char *msg)
     state->errors = listappend(state->errors, v);
 }
 
+static void
+my_warning(void *data, const char *msg)
+{
+    struct parser_state *state = (struct parser_state *) data;
+    Var                 v;
+
+    v.type = TYPE_STR;
+    v.v.str = str_dup(msg);
+    state->errors = listappend(state->errors, v);
+}
+
 static int
 my_getc(void *data)
 {
@@ -1386,7 +1411,7 @@ my_getc(void *data)
     }
 }
 
-static Parser_Client list_parser_client = { my_error, 0, my_getc };
+static Parser_Client list_parser_client = { my_error, my_warning, my_getc };
 
 Program *
 parse_list_as_program(Var code, Var *errors)
