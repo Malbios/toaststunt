@@ -233,4 +233,82 @@ class TestMap < Test::Unit::TestCase
     end
   end
 
+  # `+` merges two maps (right-hand side wins on key collision) and `-`
+  # removes the right-hand map's keys from the left. Both were previously
+  # E_TYPE for maps, so this is purely additive.
+
+  def test_that_plus_merges_two_maps
+    run_test_as('programmer') do
+      assert_equal({}, simplify(command('; return [] + [];')))
+      assert_equal({"a" => 1, "b" => 2}, simplify(command('; return (["a" -> 1] + ["b" -> 2]);')))
+    end
+  end
+
+  def test_that_plus_on_key_collision_the_right_hand_side_wins
+    run_test_as('programmer') do
+      assert_equal({"a" => 1, "b" => 99}, simplify(command('; return (["a" -> 1, "b" -> 2] + ["b" -> 99]);')))
+    end
+  end
+
+  def test_that_plus_does_not_mutate_either_operand
+    run_test_as('programmer') do
+      assert_equal [{"a" => 1}, {"a" => 2}],
+        simplify(command('; x = ["a" -> 1]; y = x + ["a" -> 2]; return {x, y};'))
+    end
+  end
+
+  def test_that_minus_removes_keys_present_in_the_right_hand_map
+    run_test_as('programmer') do
+      assert_equal({}, simplify(command('; return [] - [];')))
+      assert_equal({"b" => 2}, simplify(command('; return (["a" -> 1, "b" -> 2] - ["a" -> 0]);')))
+    end
+  end
+
+  def test_that_minus_ignores_keys_absent_from_the_left_hand_map
+    run_test_as('programmer') do
+      assert_equal({"a" => 1}, simplify(command('; return (["a" -> 1] - ["z" -> 0]);')))
+    end
+  end
+
+  def test_that_minus_does_not_mutate_either_operand
+    run_test_as('programmer') do
+      assert_equal [{"a" => 1, "b" => 2}, {"b" => 2}],
+        simplify(command('; x = ["a" -> 1, "b" -> 2]; y = x - ["a" -> 0]; return {x, y};'))
+    end
+  end
+
+  def test_that_map_plus_and_minus_still_reject_mismatched_types
+    run_test_as('programmer') do
+      assert_equal E_TYPE, simplify(command('; return (["a" -> 1] + {1, 2});'))
+      assert_equal E_TYPE, simplify(command('; return (["a" -> 1] + 5);'))
+      assert_equal E_TYPE, simplify(command('; return ({1, 2} - ["a" -> 1]);'))
+      assert_equal E_TYPE, simplify(command('; return (["a" -> 1] - {1, 2});'))
+    end
+  end
+
+  def test_that_plus_and_minus_on_other_types_are_unaffected_by_map_support
+    run_test_as('programmer') do
+      assert_equal 8, simplify(command('; return 5 + 3;'))
+      assert_equal 2, simplify(command('; return 5 - 3;'))
+      assert_equal [1, 2, 3, 4], simplify(command('; return {1, 2} + {3, 4};'))
+      assert_equal "ab", simplify(command('; return "a" + "b";'))
+    end
+  end
+
+  def test_that_repeated_map_merges_preserve_correct_semantics
+    run_test_as('programmer') do
+      code = %Q(
+        x = ["a" -> 1, "b" -> 2, "c" -> 3];
+        for i in [1..500]
+          x = x + ["b" -> i];
+          if (x["b"] != i)
+            return {0, "mismatch at", i, x["b"]};
+          endif
+        endfor
+        return {1, x};
+      ).gsub(/\s+/, ' ').strip
+      assert_equal [1, {"a" => 1, "b" => 500, "c" => 3}], simplify(command(";#{code}"))
+    end
+  end
+
 end
