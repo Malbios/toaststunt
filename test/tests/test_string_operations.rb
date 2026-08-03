@@ -246,4 +246,76 @@ class TestStringOperations < Test::Unit::TestCase
     end
   end
 
+  def test_that_strtrim_removes_leading_and_trailing_spaces_by_default
+    run_test_as('programmer') do
+      assert_equal 'hi', simplify(command('; return strtrim("  hi  ");'))
+      assert_equal 'hi', simplify(command('; return strtrim("hi");'))
+    end
+  end
+
+  def test_that_strtrim_accepts_a_custom_trim_character
+    run_test_as('programmer') do
+      assert_equal 'hi', simplify(command('; return strtrim("xxhixx", "x");'))
+    end
+  end
+
+  def test_that_strtriml_only_trims_the_left_side
+    run_test_as('programmer') do
+      assert_equal 'hi  ', simplify(command('; return strtriml("  hi  ");'))
+      assert_equal 'hixx', simplify(command('; return strtriml("xxhixx", "x");'))
+    end
+  end
+
+  def test_that_strtrimr_only_trims_the_right_side
+    run_test_as('programmer') do
+      assert_equal '  hi', simplify(command('; return strtrimr("  hi  ");'))
+      assert_equal 'xxhi', simplify(command('; return strtrimr("xxhixx", "x");'))
+    end
+  end
+
+  def test_that_strtrim_variants_are_no_ops_when_there_is_nothing_to_trim
+    run_test_as('programmer') do
+      assert_equal '', simplify(command('; return strtrim("");'))
+      assert_equal '', simplify(command('; return strtrim("   ");'))
+    end
+  end
+
+  def test_that_strupper_uppercases_a_string
+    run_test_as('programmer') do
+      assert_equal 'HELLO WORLD', simplify(command('; return strupper("Hello World");'))
+      assert_equal '123!@#', simplify(command('; return strupper("123!@#");'))
+    end
+  end
+
+  def test_that_strlower_lowercases_a_string
+    run_test_as('programmer') do
+      assert_equal 'hello world', simplify(command('; return strlower("Hello World");'))
+      assert_equal '123!@#', simplify(command('; return strlower("123!@#");'))
+    end
+  end
+
+  def test_that_parse_ordinal_recognizes_numeric_ordinals
+    run_test_as('programmer') do
+      assert_equal [2, "apple"], simplify(command('; return parse_ordinal("2nd apple");'))
+      assert_equal [21, "apples"], simplify(command('; return parse_ordinal("21st apples");'))
+      assert_equal [1, ""], simplify(command('; return parse_ordinal("1st");'))
+    end
+  end
+
+  def test_that_parse_ordinal_recognizes_word_ordinals
+    run_test_as('programmer') do
+      assert_equal [3, "apple"], simplify(command('; return parse_ordinal("third apple");'))
+      assert_equal [20, "apple"], simplify(command('; return parse_ordinal("twentieth apple");'))
+      assert_equal [23, "apple"], simplify(command('; return parse_ordinal("twenty-third apple");'))
+      assert_equal [99, "apple"], simplify(command('; return parse_ordinal("ninety-ninth apple");'))
+    end
+  end
+
+  def test_that_parse_ordinal_returns_zero_and_the_input_unchanged_when_there_is_no_leading_ordinal
+    run_test_as('programmer') do
+      assert_equal [0, "apple"], simplify(command('; return parse_ordinal("apple");'))
+      assert_equal [0, ""], simplify(command('; return parse_ordinal("");'))
+    end
+  end
+
 end

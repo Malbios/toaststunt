@@ -1914,6 +1914,91 @@ bf_pad(Var arglist, Byte next, void *vdata, Objid progr)
     return make_var_pack(r);
 }
 
+static package
+do_strtrim(Var arglist, bool trim_left, bool trim_right)
+{
+    int nargs = arglist.v.list[0].v.num;
+    const char *str = arglist.v.list[1].v.str;
+    int len = memo_strlen(str);
+
+    char trim_char = ' ';
+    if (nargs >= 2 && memo_strlen(arglist.v.list[2].v.str) > 0)
+        trim_char = arglist.v.list[2].v.str[0];
+
+    int start = 0, end = len;
+    if (trim_left)
+        while (start < end && str[start] == trim_char)
+            start++;
+    if (trim_right)
+        while (end > start && str[end - 1] == trim_char)
+            end--;
+
+    int newlen = end - start;
+    char *buf = (char *)mymalloc(newlen + 1, M_STRING);
+    memcpy(buf, str + start, newlen);
+    buf[newlen] = '\0';
+
+    Var r;
+    r.type = TYPE_STR;
+    r.v.str = buf;
+    free_var(arglist);
+    return make_var_pack(r);
+}
+
+static package
+bf_strtrim(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (str [, char]) */
+    return do_strtrim(arglist, true, true);
+}
+
+static package
+bf_strtriml(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (str [, char]) */
+    return do_strtrim(arglist, true, false);
+}
+
+static package
+bf_strtrimr(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (str [, char]) */
+    return do_strtrim(arglist, false, true);
+}
+
+static package
+bf_strupper(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (str) */
+    const char *str = arglist.v.list[1].v.str;
+    int len = memo_strlen(str);
+    char *buf = (char *)mymalloc(len + 1, M_STRING);
+
+    for (int i = 0; i < len; i++)
+        buf[i] = toupper((unsigned char)str[i]);
+    buf[len] = '\0';
+
+    Var r;
+    r.type = TYPE_STR;
+    r.v.str = buf;
+    free_var(arglist);
+    return make_var_pack(r);
+}
+
+static package
+bf_strlower(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (str) */
+    const char *str = arglist.v.list[1].v.str;
+    int len = memo_strlen(str);
+    char *buf = (char *)mymalloc(len + 1, M_STRING);
+
+    for (int i = 0; i < len; i++)
+        buf[i] = tolower((unsigned char)str[i]);
+    buf[len] = '\0';
+
+    Var r;
+    r.type = TYPE_STR;
+    r.v.str = buf;
+    free_var(arglist);
+    return make_var_pack(r);
+}
+
 void
 register_list(void)
 {
@@ -1968,4 +2053,9 @@ register_list(void)
     register_function("parse_ansi", 1, 1, bf_parse_ansi, TYPE_STR);
     register_function("remove_ansi", 1, 1, bf_remove_ansi, TYPE_STR);
     register_function("pad", 2, 4, bf_pad, TYPE_STR, TYPE_INT, TYPE_STR, TYPE_STR);
+    register_function("strtrim", 1, 2, bf_strtrim, TYPE_STR, TYPE_STR);
+    register_function("strtriml", 1, 2, bf_strtriml, TYPE_STR, TYPE_STR);
+    register_function("strtrimr", 1, 2, bf_strtrimr, TYPE_STR, TYPE_STR);
+    register_function("strupper", 1, 1, bf_strupper, TYPE_STR);
+    register_function("strlower", 1, 1, bf_strlower, TYPE_STR);
 }

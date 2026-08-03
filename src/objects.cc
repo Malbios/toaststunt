@@ -745,6 +745,25 @@ bf_descendants(Var arglist, Byte next, void *vdata, Objid progr)
     }
 }
 
+static package
+bf_all_contents(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (OBJ object [, full]) */
+    Var obj = arglist.v.list[1];
+    bool full = (listlength(arglist) > 1 && is_true(arglist.v.list[2])) ? true : false;
+
+    if (!obj.is_object()) {
+        free_var(arglist);
+        return make_error_pack(E_TYPE);
+    } else if (!is_valid(obj)) {
+        free_var(arglist);
+        return make_error_pack(E_INVARG);
+    } else {
+        Var r = db_all_contents(obj, full);
+        free_var(arglist);
+        return make_var_pack(r);
+    }
+}
+
 static int
 move_to_nothing(Objid oid)
 {
@@ -1422,6 +1441,8 @@ register_objects(void)
     register_function("ancestors", 1, 2, bf_ancestors,
                       TYPE_ANY, TYPE_ANY);
     register_function("descendants", 1, 2, bf_descendants,
+                      TYPE_ANY, TYPE_ANY);
+    register_function("all_contents", 1, 2, bf_all_contents,
                       TYPE_ANY, TYPE_ANY);
     register_function("max_object", 0, 0, bf_max_object);
     register_function("players", 0, 0, bf_players);

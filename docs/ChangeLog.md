@@ -40,6 +40,12 @@
 - Add a `strfindall(source, what [, case-matters] [, offset])` function that returns the (always absolute) positions of every non-overlapping occurrence of `what` in `source`, the string equivalent of `all_members()` for lists; previously the only native alternative was looping `pcre_match()` by hand, which isn't available on builds without PCRE2.
 - Add a `listunique(list [, case-matters])` function that returns a copy of `list` with duplicate elements removed (keeping the first occurrence of each), replacing the common `setadd()`-in-a-loop workaround, which is O(n^2) since each `setadd()` call itself rescans the result-so-far.
 - Raised the maximum number of registered built-in functions from 256 to 65535. Programs compiled under the new database version encode a builtin call's function id in 2 bytes instead of 1; programs compiled under an older database version keep using 1 byte, so existing databases (and suspended tasks within them) continue to work unchanged.
+- Add `strtrim(str [, char])`, `strtriml(str [, char])`, and `strtrimr(str [, char])` functions that trim a character (default space) from both/left/right ends of a string.
+- Add `strupper(str)` and `strlower(str)` functions to convert a string to upper/lower case.
+- Add a `format_time([fmt [, time]])` function, like `ctime()` but taking a caller-supplied `strftime()`-style format string (default `"%c %Z"`) instead of `ctime()`'s single fixed format.
+- Add a `parse_time(str [, fmt [, is_dst]])` function, the complement to `format_time()`/`ctime()`: parses a string against a `strptime()`-style format (default matching `ctime()`'s own format) and returns seconds since the epoch.
+- Add a `parse_ordinal(str)` function that splits a leading ordinal -- numeric (`"2nd"`) or spelled out (`"third"`, `"twenty-third"`, up to `"ninety-ninth"`) -- off the front of a string, returning `{ordinal-or-0, remainder}`.
+- Add an `all_contents(obj [, full])` function that returns every object recursively contained by `obj` (optionally including `obj` itself), the contents-chain counterpart to the existing `descendants()`.
 
 **WARNING**: This version increments the database version (DBV_BiFuncId16), making databases incompatible with previous releases.
 
