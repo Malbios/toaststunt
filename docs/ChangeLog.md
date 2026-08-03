@@ -46,6 +46,8 @@
 - Add a `parse_time(str [, fmt [, is_dst]])` function, the complement to `format_time()`/`ctime()`: parses a string against a `strptime()`-style format (default matching `ctime()`'s own format) and returns seconds since the epoch.
 - Add a `parse_ordinal(str)` function that splits a leading ordinal -- numeric (`"2nd"`) or spelled out (`"third"`, `"twenty-third"`, up to `"ninety-ninth"`) -- off the front of a string, returning `{ordinal-or-0, remainder}`.
 - Add an `all_contents(obj [, full])` function that returns every object recursively contained by `obj` (optionally including `obj` itself), the contents-chain counterpart to the existing `descendants()`.
+- Add a `$server_options.match_mode` option for command-parsing object matching. The default (0) keeps today's prefix-only matching unchanged; setting it to 1 switches to exact/starts-with/contains-anywhere matching (in that priority order) against each candidate's name and aliases, with a leading ordinal word ("2nd apple", "twenty-third apple") disambiguating among same-tier matches instead of requiring a unique match.
+- **Behavior change**: referencing an object by raw number (`#123`) in a typed command now requires wizard or programmer permissions; previously any player could use this syntax. This applies regardless of `match_mode`.
 
 **WARNING**: This version increments the database version (DBV_BiFuncId16), making databases incompatible with previous releases.
 

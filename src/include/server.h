@@ -242,6 +242,12 @@ int proxy_connected(Objid connection, char *command);
 	     if (0 < value && value < MIN_MAX_QUEUED_OUTPUT)		    \
 		 value = MIN_MAX_QUEUED_OUTPUT;						        \
 	   }))															\
+																	\
+  DEFINE( SVO_MATCH_MODE, match_mode,								\
+	  flag, 0, /* already canonical; 0 = legacy prefix matching,	\
+	              1 = complex_match() exact/starts-with/contains	\
+	              matching with ordinal disambiguation */			\
+	  )																\
 
 /* List of all category (2) and (3) cached server options */
 enum Server_Option {

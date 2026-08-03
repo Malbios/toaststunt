@@ -15,3 +15,4 @@
     - NO_NAME_LOOKUP (disable automatic DNS name resolution on new connections. Can be overridden with $server_options.no_name_lookup)
     - PCRE_PATTERN_CACHE_SIZE (specifies how many PCRE patterns are cached)
     - INCLUDE_RT_VARS (Include runtime environment variables in the stack argument for `handle_uncaught_error`, `handle_task_timeout`, and `handle_lagging_task`)
+    - MATCH_MODE ($server_options.match_mode: 0 (default) keeps the legacy prefix-only object matching; 1 switches to exact/starts-with/contains-anywhere matching with leading-ordinal disambiguation, e.g. "2nd apple" or "twenty-third apple")
