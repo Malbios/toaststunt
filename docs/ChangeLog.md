@@ -15,6 +15,7 @@
 - A `try`/`except` catching a raised error now builds its stack-trace list from the point of view of the catching programmer, so anonymous objects the catcher is actually allowed to see (as owner or wizard) show up as real references instead of always being blanked into invalid placeholders.
 - `sqlite_execute()` no longer sanitizes the same result string twice when `SQLITE_SANITIZE_STRINGS` is set; `sanitize_string_for_moo()` also uses a faster scan for long strings.
 - Corrected `simplex_noise()`'s 2D scale factor from a self-admitted preliminary `40.0` to `70.0`, matching Stefan Gustavson's own later corrected reference implementation; 1D/3D/4D were already using their correct, non-placeholder constants.
+- `chparent()`/`chparents()`/`create()`/`recreate()` now correctly reject a duplicate parent anywhere in a multi-parent list. The duplicate check's inner loop bound was off (`j = i + i` instead of `j = i + 1`), so it only reliably caught a duplicate at position 1; a duplicate located entirely at position 2 or later (e.g. `{a, b, b}`) silently passed instead of raising E_INVARG.
 
 ### New Features
 - Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.
@@ -35,6 +36,9 @@
 - Add a `pad(str, width [, char] [, side])` function that pads a string to a target width with a fill character (default space), on the left, right (default), or both sides for centering.
 - Compiling a verb (via `.program` or `set_verb_code()`) now warns, without blocking the save, when an assignment is used as the condition of `if`/`elseif`/`while` (e.g. `if (x = 1)`, a classic typo for `==`), and when an inline catch expression (`` `expr ! ANY => default' ``) uses a bare `ANY` that swallows every error rather than listing specific codes.
 - Add an `anons([parent])` builtin that returns all currently-live anonymous object instances, optionally filtered to one direct parent. Wizards see every matching instance; non-wizards only see ones they own.
+- Add a `toerr(int-or-str)` function that converts an integer or an error name string (e.g. `"E_INVARG"`, case-insensitive) to the matching error value, raising E_INVARG if it doesn't match a known error.
+- Add a `strfindall(source, what [, case-matters] [, offset])` function that returns the (always absolute) positions of every non-overlapping occurrence of `what` in `source`, the string equivalent of `all_members()` for lists; previously the only native alternative was looping `pcre_match()` by hand, which isn't available on builds without PCRE2.
+- Add a `listunique(list [, case-matters])` function that returns a copy of `list` with duplicate elements removed (keeping the first occurrence of each), replacing the common `setadd()`-in-a-loop workaround, which is O(n^2) since each `setadd()` call itself rescans the result-so-far.
 
 ## 2.7.3 (Jun 20, 2025)
 ### Bug Fixes

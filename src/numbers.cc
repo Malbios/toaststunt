@@ -41,6 +41,7 @@
 #include "storage.h"
 #include "streams.h"
 #include "structures.h"
+#include "unparse.h"
 #include "utils.h"
 #include "list.h"
 
@@ -446,6 +447,37 @@ bf_tofloat(Var arglist, Byte next, void *vdata, Objid progr)
     if (e != E_NONE)
         return make_error_pack(e);
 
+    return make_var_pack(r);
+}
+
+static package
+bf_toerr(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    Var v = arglist.v.list[1];
+    Var r;
+    r.type = TYPE_ERR;
+
+    if (v.type == TYPE_ERR) {
+        r.v.err = v.v.err;
+    } else if (v.type == TYPE_INT) {
+        if (v.v.num < E_NONE || v.v.num > E_INTRPT) {
+            free_var(arglist);
+            return make_error_pack(E_INVARG);
+        }
+        r.v.err = (enum error) v.v.num;
+    } else if (v.type == TYPE_STR) {
+        int e = parse_error(v.v.str);
+        if (e < 0) {
+            free_var(arglist);
+            return make_error_pack(E_INVARG);
+        }
+        r.v.err = (enum error) e;
+    } else {
+        free_var(arglist);
+        return make_error_pack(E_TYPE);
+    }
+
+    free_var(arglist);
     return make_var_pack(r);
 }
 
@@ -963,6 +995,7 @@ register_numbers(void)
 
     register_function("toint", 1, 1, bf_toint, TYPE_ANY);
     register_function("tofloat", 1, 1, bf_tofloat, TYPE_ANY);
+    register_function("toerr", 1, 1, bf_toerr, TYPE_ANY);
     register_function("min", 1, -1, bf_min, TYPE_NUMERIC);
     register_function("max", 1, -1, bf_max, TYPE_NUMERIC);
     register_function("abs", 1, 1, bf_abs, TYPE_NUMERIC);

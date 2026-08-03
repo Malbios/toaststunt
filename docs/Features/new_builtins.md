@@ -31,3 +31,5 @@
     - listremove_all (return a copy of list with every occurrence of value removed, unlike setremove() which only removes the first)
     - verb_callable (return true if obj:verb-name would successfully dispatch, searching ancestors and requiring the verb's `x` bit, unlike verb_info()/verb_args() which only look at the object passed in)
     - pad (pad a string to a target width with a fill character, on the left, right, or both sides)
+    - strfindall (return the absolute positions of every non-overlapping occurrence of a substring within a string, the string equivalent of all_members())
+    - listunique (return a copy of list with duplicate elements removed, keeping the first occurrence of each)
