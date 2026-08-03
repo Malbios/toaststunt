@@ -15,9 +15,11 @@
     Pavel@Xerox.Com
  *****************************************************************************/
 
+#include <algorithm>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 
 #include "config.h"
 #include "db.h"
@@ -26,6 +28,7 @@
 #include "structures.h"
 #include "match.h"
 #include "parse_cmd.h"
+#include "server.h"
 #include "storage.h"
 #include "unparse.h"
 #include "utils.h"
@@ -115,28 +118,6 @@ match_contents(Objid player, const char *name)
         return d.partial;
 }
 
-Objid
-match_object(Objid player, const char *name)
-{
-    if (name[0] == '\0')
-        return NOTHING;
-    if (name[0] == '#') {
-        char *p;
-        Objid r = strtol(name + 1, &p, 10);
-
-        if (*p != '\0' || !valid(r))
-            return FAILED_MATCH;
-        return r;
-    }
-    if (!valid(player))
-        return FAILED_MATCH;
-    if (!strcasecmp(name, "me"))
-        return player;
-    if (!strcasecmp(name, "here"))
-        return db_object_location(player);
-    return match_contents(player, name);
-}
-
 struct ordinal_word {
     const char *name;
     int value;
@@ -181,12 +162,15 @@ lookup_ordinal_word(const char *word, size_t len, const struct ordinal_word *tab
 /* Splits a leading ordinal -- numeric ("2nd", lenient about digit/suffix
  * agreement) or spelled out ("third", "twenty-third", up to "ninety-ninth"
  * -- larger word-form scales like "hundredth" aren't handled) -- off the
- * front of a string. Returns {ordinal-or-0, remainder}; 0 means no leading
- * ordinal was found and remainder is the input unchanged. */
-static package
-bf_parse_ordinal(Var arglist, Byte next, void *vdata, Objid progr)
-{   /* (str) */
-    const char *str = arglist.v.list[1].v.str;
+ * front of `str`. Returns the ordinal value (0 if none was found) and sets
+ * `*rest_out` to the remainder after the ordinal and any following
+ * whitespace, or to `str` unchanged if no ordinal was found. Shared by the
+ * `parse_ordinal` builtin and complex_match()'s ordinal disambiguation
+ * below, so there's only one ordinal parser in the codebase rather than two
+ * independent ones. */
+static int
+parse_leading_ordinal(const char *str, const char **rest_out)
+{
     const char *p = str;
     int value = 0;
     const char *rest = str;
@@ -240,6 +224,170 @@ bf_parse_ordinal(Var arglist, Byte next, void *vdata, Objid progr)
     } else {
         rest = str;
     }
+
+    *rest_out = rest;
+    return value;
+}
+
+/* Combines an object's real name and its `.aliases` property into a single
+ * flat list of candidate-matching keys, for complex_match()'s per-candidate
+ * key-list comparison below (unlike match_proc()'s name-then-each-alias
+ * loop, complex_match() wants one flat list per candidate). */
+static Var
+name_and_aliases(Objid oid)
+{
+    Var *names = aliases(oid);
+    int n = names[0].v.num;
+    Var result = new_list(n + 1);
+
+    result.v.list[1] = str_dup_to_var(db_object_name(oid));
+    for (int i = 1; i <= n; i++)
+        result.v.list[i + 1] = var_ref(names[i]);
+
+    return result;
+}
+
+struct complex_match_data {
+    Var targets;    /* list of Objid Vars, parallel to `keys` */
+    Var keys;       /* list of name_and_aliases() lists, one per candidate */
+};
+
+static int
+complex_match_collect(void *data, Objid oid)
+{
+    struct complex_match_data *d = (struct complex_match_data *)data;
+
+    d->targets = listappend(d->targets, Var::new_obj(oid));
+    d->keys = listappend(d->keys, name_and_aliases(oid));
+
+    return 0;
+}
+
+static void
+push_if_not_exists(std::vector<int> &vec, int value)
+{
+    if (std::find(vec.begin(), vec.end(), value) == vec.end())
+        vec.push_back(value);
+}
+
+/* Three-tier object matching: exact (case-insensitive equality), starts-with,
+ * and contains-anywhere, checked against every name/alias key of every
+ * candidate. A leading ordinal word ("2nd", "twenty-third") is stripped from
+ * `input` first and used to select the Nth candidate within whichever tier
+ * has that many entries, rather than requiring an exact/unique match.
+ * Returns the (1-based-into-`keys`) indices of the matching candidates:
+ * empty for no match, one element for a unique or ordinal-selected match,
+ * more than one for an ambiguous match. */
+static std::vector<int>
+complex_match(const char *input, Var *keys)
+{
+    if (keys->v.list[0].v.num <= 0)
+        return {};
+
+    const char *rest;
+    int ordinal = parse_leading_ordinal(input, &rest);
+    const char *subject = (ordinal > 0) ? rest : input;
+
+    if (*subject == '\0')
+        return {};
+
+    int subject_len = (int) strlen(subject);
+    std::vector<int> exact_matches, start_matches, contain_matches;
+
+    for (int i = 1; i <= keys->v.list[0].v.num; i++) {
+        Var *candidate_keys = keys->v.list[i].v.list;
+        for (int j = 1; j <= candidate_keys[0].v.num; j++) {
+            if (candidate_keys[j].type != TYPE_STR)
+                continue;
+            const char *key = candidate_keys[j].v.str;
+            int key_len = (int) memo_strlen(key);
+
+            if (!strcasecmp(subject, key))
+                push_if_not_exists(exact_matches, i);
+            if (strindex(key, key_len, subject, subject_len, 0) == 1)
+                push_if_not_exists(start_matches, i);
+            if (strindex(key, key_len, subject, subject_len, 0) >= 1)
+                push_if_not_exists(contain_matches, i);
+        }
+    }
+
+    if (ordinal > 0) {
+        if ((size_t) ordinal <= exact_matches.size())
+            return { exact_matches[ordinal - 1] };
+        if ((size_t) ordinal <= start_matches.size())
+            return { start_matches[ordinal - 1] };
+        if ((size_t) ordinal <= contain_matches.size())
+            return { contain_matches[ordinal - 1] };
+        return {};
+    }
+
+    if (!exact_matches.empty())
+        return exact_matches;
+    if (!start_matches.empty())
+        return start_matches;
+    return contain_matches;
+}
+
+Objid
+match_object(Objid player, const char *name)
+{
+    if (name[0] == '\0')
+        return NOTHING;
+    if (name[0] == '#') {
+        /* Referencing an object by raw number bypasses name/alias matching
+         * entirely, so it's restricted to wizards and programmers rather
+         * than left open to any player. */
+        if (!is_wizard(player) && !is_programmer(player))
+            return FAILED_MATCH;
+
+        char *p;
+        Objid r = strtol(name + 1, &p, 10);
+
+        if (*p != '\0' || !valid(r))
+            return FAILED_MATCH;
+        return r;
+    }
+    if (!valid(player))
+        return FAILED_MATCH;
+    if (!strcasecmp(name, "me"))
+        return player;
+    if (!strcasecmp(name, "here"))
+        return db_object_location(player);
+    if (!server_flag_option_cached(SVO_MATCH_MODE))
+        return match_contents(player, name);
+
+    Objid loc;
+    int step;
+    Objid oid;
+    struct complex_match_data d = { new_list(0), new_list(0) };
+
+    loc = db_object_location(player);
+    for (oid = player, step = 0; step < 2; oid = loc, step++) {
+        if (!valid(oid))
+            continue;
+        db_for_all_contents(oid, complex_match_collect, &d);
+    }
+
+    std::vector<int> matches = complex_match(name, &d.keys);
+    Objid result;
+    if (matches.empty())
+        result = FAILED_MATCH;
+    else if (matches.size() == 1)
+        result = d.targets.v.list[matches[0]].v.obj;
+    else
+        result = AMBIGUOUS;
+
+    free_var(d.targets);
+    free_var(d.keys);
+    return result;
+}
+
+static package
+bf_parse_ordinal(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (str) */
+    const char *str = arglist.v.list[1].v.str;
+    const char *rest;
+    int value = parse_leading_ordinal(str, &rest);
 
     Var result = new_list(2);
     result.v.list[1].type = TYPE_INT;
