@@ -269,7 +269,11 @@ complex_var_ref(Var v)
 {
     switch (v.type) {
         case TYPE_STR:
-            addref(v.v.str);
+            /* Mirrors complex_free_var()'s guard (via free_str()'s own
+             * emptystring check): the singleton's refcount is pinned at
+             * creation and must never be incremented either. */
+            if (v.v.str != emptystring)
+                addref(v.v.str);
             break;
         case TYPE_LIST:
             /* Mirrors complex_free_var()'s is_shared_empty() guard: the
@@ -305,7 +309,11 @@ complex_var_ref(Var v)
 {
     switch (v.type) {
         case TYPE_STR:
-            addref(v.v.str);
+            /* Mirrors complex_free_var()'s guard (via free_str()'s own
+             * emptystring check): the singleton's refcount is pinned at
+             * creation and must never be incremented either. */
+            if (v.v.str != emptystring)
+                addref(v.v.str);
             break;
         case TYPE_LIST:
             if (!is_shared_empty(v))

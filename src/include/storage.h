@@ -133,6 +133,7 @@ typedef enum Memory_Type {
 
 extern char *str_dup(const char *);
 extern const char *str_ref(const char *);
+extern const char *emptystring;
 
 extern void myfree(void *where, Memory_Type type);
 extern void *mymalloc(unsigned size, Memory_Type type);
@@ -141,7 +142,7 @@ extern void *myrealloc(void *where, unsigned size, Memory_Type type);
 static inline void		/* XXX was extern, fix for non-gcc compilers */
 free_str(const char *s)
 {
-    if (delref(s) == 0)
+    if (s != emptystring && delref(s) == 0)
 	myfree((void *) s, M_STRING);
 }
 
