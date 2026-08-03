@@ -710,6 +710,64 @@ bf_ctime(Var arglist, Byte next, void *vdata, Objid progr)
     return make_var_pack(r);
 }
 
+/* Unlike ctime(), which always uses a single fixed format, this takes a
+ * caller-supplied strftime()-style format string. */
+static package
+bf_format_time(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* ([fmt [, time]]) */
+    int nargs = arglist.v.list[0].v.num;
+    const char *fmt = (nargs >= 1) ? arglist.v.list[1].v.str : "%c %Z";
+    time_t c = (nargs >= 2) ? arglist.v.list[2].v.num : time(nullptr);
+    char buffer[256];
+
+    struct tm *t = localtime(&c);
+
+    free_var(arglist);
+
+    if (t == nullptr)
+        return make_error_pack(E_INVARG);
+
+    if (strftime(buffer, sizeof buffer, fmt, t) == 0)
+        return make_error_pack(E_INVARG);
+
+    Var r;
+    r.type = TYPE_STR;
+    r.v.str = str_dup(buffer);
+    return make_var_pack(r);
+}
+
+/* The complement to format_time(): parses a string against a strptime()-style
+ * format (default matching ctime()'s own format) and returns seconds since
+ * the epoch. */
+static package
+bf_parse_time(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (str [, fmt [, is_dst]]) */
+    int nargs = arglist.v.list[0].v.num;
+    const char *str = arglist.v.list[1].v.str;
+    const char *fmt = (nargs >= 2) ? arglist.v.list[2].v.str : "%a %b %d %H:%M:%S %Y";
+    int is_dst = (nargs >= 3) ? (arglist.v.list[3].v.num != 0) : -1;
+
+    struct tm t;
+    memset(&t, 0, sizeof t);
+    t.tm_isdst = is_dst;
+
+    const char *end = strptime(str, fmt, &t);
+
+    free_var(arglist);
+
+    if (end == nullptr)
+        return make_error_pack(E_INVARG);
+
+    time_t result = mktime(&t);
+    if (result == (time_t)-1)
+        return make_error_pack(E_INVARG);
+
+    Var r;
+    r.type = TYPE_INT;
+    r.v.num = result;
+    return make_var_pack(r);
+}
+
 #ifdef __FreeBSD__
 #define CLOCK_MONOTONIC_RAW CLOCK_MONOTONIC
 #endif
@@ -1008,6 +1066,8 @@ register_numbers(void)
     register_function("time", 0, 0, bf_time);
     register_function("ctime", 0, 1, bf_ctime, TYPE_INT);
     register_function("ftime", 0, 1, bf_ftime, TYPE_INT);
+    register_function("format_time", 0, 2, bf_format_time, TYPE_STR, TYPE_INT);
+    register_function("parse_time", 1, 3, bf_parse_time, TYPE_STR, TYPE_STR, TYPE_INT);
     register_function("floatstr", 2, 3, bf_floatstr,
                       TYPE_FLOAT, TYPE_INT, TYPE_ANY);
 

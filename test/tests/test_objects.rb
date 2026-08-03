@@ -1773,6 +1773,32 @@ class TestObject < Test::Unit::TestCase
     end
   end
 
+  def test_all_contents
+    run_test_as('wizard') do
+      room = create(NOTHING)
+      box = create(NOTHING)
+      apple = create(NOTHING)
+      worm = create(NOTHING)
+
+      move(box, room)
+      move(apple, box)
+      move(worm, apple)
+
+      assert_equal [], all_contents(worm)
+      assert_equal worm, all_contents(apple)
+      assert_equal [apple, worm], all_contents(box)
+      assert_equal [box, apple, worm], all_contents(room)
+
+      assert_equal [room, box, apple, worm], all_contents(room, 1)
+      assert_equal [box, apple, worm], all_contents(room, 0)
+
+      assert_equal E_TYPE, simplify(command('; return all_contents(1);'))
+
+      recycle(room)
+      assert_equal E_INVARG, all_contents(room)
+    end
+  end
+
   def test_various_things_that_can_go_wrong
     run_test_as('programmer') do
       a = create(NOTHING)

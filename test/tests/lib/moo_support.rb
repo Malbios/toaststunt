@@ -419,6 +419,14 @@ module MooSupport
     end
   end
 
+  def all_contents(object, *args)
+    unless args.empty?
+      simplify command %Q|; return all_contents(#{obj_ref(object)}, #{args.map{|a| value_ref(a)}.join(', ')});|
+    else
+      simplify command %Q|; return all_contents(#{obj_ref(object)});|
+    end
+  end
+
   def isa(object, parent)
     simplify command %Q|; return isa(#{obj_ref(object)}, #{obj_ref(parent)});|
   end

@@ -114,4 +114,33 @@ class TestMath < Test::Unit::TestCase
     end
   end
 
+  def test_that_format_time_uses_a_caller_supplied_strftime_format
+    run_test_as('programmer') do
+      # A fixed, arbitrary epoch time -- the exact wall-clock rendering is
+      # timezone-dependent (format_time uses localtime()), so this only
+      # checks that a custom format string is honored, not a specific value.
+      assert_equal 5, simplify(command(%Q|; return length(format_time("%H:%M", 0));|))
+    end
+  end
+
+  def test_that_format_time_defaults_to_the_current_time
+    run_test_as('programmer') do
+      assert_kind_of String, simplify(command('; return format_time();'))
+    end
+  end
+
+  def test_that_parse_time_is_the_inverse_of_format_time
+    run_test_as('programmer') do
+      # Round-trip through both functions instead of asserting an absolute
+      # value, so the test passes regardless of the server's timezone.
+      assert_equal 1000000000, simplify(command(%Q|; return parse_time(format_time("%Y-%m-%d %H:%M:%S", 1000000000), "%Y-%m-%d %H:%M:%S");|))
+    end
+  end
+
+  def test_that_parse_time_rejects_input_that_does_not_match_the_format
+    run_test_as('programmer') do
+      assert_equal E_INVARG, simplify(command(%Q|; return parse_time("not a date", "%Y-%m-%d");|))
+    end
+  end
+
 end
