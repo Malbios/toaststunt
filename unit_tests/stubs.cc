@@ -163,6 +163,10 @@ const char *error_name(enum error) {
     return "";
 }
 
+int parse_error(const char *) {
+    return -1;
+}
+
 const char *unparse_error(enum error) {
     return "";
 }
