@@ -46,7 +46,15 @@
 
 /* Bandaid: Something is killing all of our references to the
  * empty list, which is causing the server to crash. So this is
- * now a global and utils.cc won't free the list if it's emptylist. */
+ * now a global and utils.cc won't free the list if it's emptylist.
+ * Its refcount is pinned at the value mymalloc() gives it at creation
+ * and is never incremented or decremented again -- new_list() and
+ * complex_var_ref() (utils.cc) both skip the addref that would
+ * otherwise apply, mirroring complex_free_var()'s skipped decref.
+ * Without that symmetry the count would climb forever (nothing ever
+ * brings it back down) and eventually overflow and wrap back through
+ * zero, reproducing the exact premature-free crash this bandaid
+ * exists to prevent. */
 Var emptylist;
 
 Var
@@ -72,8 +80,6 @@ new_list(int size)
 #ifdef ENABLE_GC
         assert(gc_get_color(emptylist.v.list) == GC_GREEN);
 #endif
-
-        addref(emptylist.v.list);
 
         return emptylist;
     }

@@ -586,7 +586,10 @@ rbtprev(rbtrav *trav)
  * exposing this as a global lets complex_free_var() skip freeing it if its
  * refcount would otherwise hit zero, the same protection emptylist already
  * has. Without this, the empty map has no defense against the same
- * premature-free crash class the list bandaid exists to prevent. */
+ * premature-free crash class the list bandaid exists to prevent. Its
+ * refcount is likewise pinned at creation and never touched again --
+ * new_map() and complex_var_ref() (utils.cc) both skip the addref that
+ * would otherwise apply. */
 Var emptymap;
 
 static Var
@@ -616,8 +619,6 @@ new_map(void)
 #ifdef ENABLE_GC
     assert(gc_get_color(emptymap.v.tree) == GC_GREEN);
 #endif
-
-    addref(emptymap.v.tree);
 
     return emptymap;
 }
