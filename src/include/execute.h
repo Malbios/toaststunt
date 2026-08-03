@@ -41,7 +41,11 @@ typedef struct {
 				   next == 1, 2, 3, ... means the returned value should be
 				   fed to the bi_func (as specified in bi_func_id) 
 				   together with the next code. */
-    Byte bi_func_id;
+    unsigned bi_func_id;	/* wide enough for MAX_FUNC (functions.h); safe
+				   across server upgrades since this is
+				   persisted by name (write_activ/read_activ)
+				   and re-resolved via number_func_by_name()
+				   on load, not stored as a raw byte offset. */
     void *bi_func_data;
     Var temp;			/* VM's temp register */
 

@@ -562,14 +562,27 @@ expr:
 		    unsigned f_no;
 
 		    $$ = alloc_expr(EXPR_CALL);
-		    if ((f_no = number_func_by_name($1)) == FUNC_NOT_FOUND) {
-			/* Replace with call_function("$1", @args) */
+		    if ((f_no = number_func_by_name($1)) == FUNC_NOT_FOUND
+			|| f_no > max_encoded_bi_func_id(language_version)) {
+			/* Replace with call_function("$1", @args). Reached
+			 * either because $1 isn't a known builtin at all, or
+			 * because it's a real builtin whose id this program's
+			 * language_version can't encode directly (an old
+			 * DB_Version being recompiled -- e.g. to resume a
+			 * suspended task -- after the live builtin table has
+			 * grown past what that version's bytecode operand
+			 * width can hold; see bi_func_id_bytes() in
+			 * functions.cc). */
 			Expr           *fname = alloc_var(TYPE_STR);
 			Arg_List       *a = alloc_arg_list(ARG_NORMAL, fname);
 
 			fname->e.var.v.str = $1;
 			a->next = $3;
-			warning("Unknown built-in function: ", $1);
+			if (f_no == FUNC_NOT_FOUND)
+			    warning("Unknown built-in function: ", $1);
+			else
+			    warning("Built-in function id too large for this "
+				    "program's language version: ", $1);
 			$$->e.call.func = number_func_by_name("call_function");
 			$$->e.call.args = a;
 		    } else {

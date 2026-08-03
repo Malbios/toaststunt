@@ -84,6 +84,11 @@ typedef enum {
                  */
     DBV_Bool,       /* Boolean type
                      */
+    DBV_BiFuncId16,     /* Built-in function calls store 16-bit ids.
+                         * Preserves compatibility with older one-byte
+                         * built-in call bytecode in suspended tasks --
+                         * see bi_func_id_bytes() in functions.cc.
+                         */
     Num_DB_Versions		/* Special: the current version is this - 1. */
 } DB_Version;
 

@@ -2296,7 +2296,7 @@ else if (obj.type == TYPE_##t1) {           \
                 unsigned func_id;
                 Var args;
 
-                func_id = READ_BYTES(bv, 1);    /* 1 == numbytes of func_id */
+                func_id = READ_BYTES(bv, bi_func_id_bytes(RUN_ACTIV.prog->version));
                 args = POP();   /* should be list */
                 if (args.type != TYPE_LIST) {
                     free_var(args);
@@ -4099,11 +4099,14 @@ check_pc_validity(Program * prog, int which_vector, unsigned pc)
                      : &prog->fork_vectors[which_vector]);
 
     /* Current insn must be call to verb or built-in function like eval(),
-     * move(), pass(), or suspend().
+     * move(), pass(), or suspend(). The builtin-call opcode byte sits
+     * bi_func_id_bytes(prog->version) + 1 bytes behind pc, since that's how
+     * many operand bytes OP_BI_FUNC_CALL's function id was encoded in when
+     * this program was compiled (see bi_func_id_bytes() in functions.cc).
      */
     return (pc < bc->size
             && (bc->vector[pc - 1] == OP_CALL_VERB
-                || bc->vector[pc - 2] == OP_BI_FUNC_CALL));
+                || bc->vector[pc - bi_func_id_bytes(prog->version) - 1] == OP_BI_FUNC_CALL));
 }
 
 int

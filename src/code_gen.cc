@@ -54,6 +54,9 @@ struct gstate {
     Var *literals;
     unsigned num_fork_vectors, max_fork_vectors;
     Bytecodes *fork_vectors;
+    DB_Version version;    /* Needed by emit_call_bi_func_op() to pick the
+                            * builtin-call-id encoding width; see
+                            * bi_func_id_bytes() in functions.cc. */
 };
 typedef struct gstate GState;
 
@@ -501,7 +504,23 @@ emit_call_bi_func_op(Opcode op, unsigned func, State * state)
         state->pushmap[state->num_bytes - 1] = OP_CALL_VERB;
     }
 #endif /* BYTECODE_REDUCE_REF */
-    emit_byte(func, state);
+    /*
+     * Operand width is gated on the *compiled program's own* DB_Version,
+     * never on the live size of bf_table or on func's own numeric value --
+     * see bi_func_id_bytes() in functions.cc for why. The parser is
+     * responsible for never emitting a func id an old-version program can't
+     * encode (falling back to call_function() instead); this is a defensive
+     * backstop, not the primary check.
+     */
+    if (func > max_encoded_bi_func_id(state->gstate->version))
+        panic_moo("Built-in function id too large to encode in EMIT_CALL_BI_FUNC_OP()");
+
+    if (bi_func_id_bytes(state->gstate->version) == 1) {
+        emit_byte((Byte) func, state);
+    } else {
+        emit_byte((Byte) ((func >> 8) & 0xFF), state);
+        emit_byte((Byte) (func & 0xFF), state);
+    }
 }
 
 static void
@@ -1411,6 +1430,7 @@ generate_code(Stmt * stmt, DB_Version version)
     GState gstate;
 
     init_gstate(&gstate);
+    gstate.version = version;
 
     prog->main_vector = stmt_to_code(stmt, &gstate);
     prog->version = version;
