@@ -1033,4 +1033,47 @@ class TestAlgorithms < Test::Unit::TestCase
     end
   end
 
+  def test_that_listunique_removes_duplicates_keeping_first_occurrence
+    run_test_as('programmer') do
+      assert_equal [1, 2, 3, 4], simplify(command('; return listunique({1, 2, 2, 3, 1, 4, 3});'))
+    end
+  end
+
+  def test_that_listunique_works_on_an_empty_list
+    run_test_as('programmer') do
+      assert_equal [], simplify(command('; return listunique({});'))
+    end
+  end
+
+  def test_that_listunique_collapses_an_all_duplicates_list_to_one_element
+    run_test_as('programmer') do
+      # simplify() unwraps a single-element list to its bare value.
+      assert_equal 1, simplify(command('; return listunique({1, 1, 1});'))
+    end
+  end
+
+  def test_that_listunique_does_not_mutate_the_original_list
+    run_test_as('programmer') do
+      assert_equal [[1, 2, 2], [1, 2]], simplify(command('; x = {1, 2, 2}; y = listunique(x); return {x, y};'))
+    end
+  end
+
+  def test_that_listunique_defaults_to_case_sensitive_comparison
+    run_test_as('programmer') do
+      assert_equal ["A", "a", "B"], simplify(command('; return listunique({"A", "a", "B"});'))
+    end
+  end
+
+  def test_that_listunique_can_be_made_case_insensitive
+    run_test_as('programmer') do
+      assert_equal ["A", "B"], simplify(command('; return listunique({"A", "a", "B"}, 0);'))
+    end
+  end
+
+  def test_that_listunique_rejects_wrong_argument_types
+    run_test_as('programmer') do
+      assert_equal E_TYPE, simplify(command('; return listunique(5);'))
+    end
+  end
+
 end

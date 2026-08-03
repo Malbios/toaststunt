@@ -710,6 +710,40 @@ bf_listremove_all(Var arglist, Byte next, void *vdata, Objid progr)
     return background_thread(listremove_all_thread_callback, &arglist);
 }
 
+/* Return a copy of the list with duplicate elements removed, keeping the
+ * first occurrence of each. Faster in practice than the setadd()-in-a-loop
+ * workaround it replaces: each setadd() call independently rescans the
+ * result-so-far via ismember() and does its own MOO-level dispatch/quota
+ * check, whereas this does a single pass reusing the in-progress result
+ * buffer directly. Still O(n^2) worst case -- Var has no general hashing
+ * mechanism (lists/maps are recursively comparable, not hashable), so a
+ * sub-O(n^2) generic dedup isn't available without new infrastructure.
+ */
+void listunique_thread_callback(Var arglist, Var *ret, void *extra_data)
+{
+    Var list = arglist.v.list[1];
+    bool case_matters = arglist.v.list[0].v.num < 2 || is_true(arglist.v.list[2]);
+
+    *ret = new_list(0);
+    for (int i = 1, len = list.v.list[0].v.num; i <= len; i++) {
+        bool dup = false;
+        for (int j = 1, rlen = ret->v.list[0].v.num; j <= rlen; j++) {
+            if (equality(list.v.list[i], ret->v.list[j], case_matters)) {
+                dup = true;
+                break;
+            }
+        }
+        if (!dup)
+            *ret = listappend(*ret, var_ref(list.v.list[i]));
+    }
+}
+
+static package
+bf_listunique(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    return background_thread(listunique_thread_callback, &arglist);
+}
+
 
 static package
 insert_or_append(Var arglist, int append1)
@@ -1198,6 +1232,44 @@ bf_rindex(Var arglist, Byte next, void *vdata, Objid progr)
 
     free_var(arglist);
     return make_var_pack(r);
+}
+
+static package
+bf_strfindall(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* (source, what [, case-matters [, offset]]) */
+    int case_matters = 0;
+    int offset = 0;
+
+    if (arglist.v.list[0].v.num > 2)
+        case_matters = is_true(arglist.v.list[3]);
+    if (arglist.v.list[0].v.num > 3)
+        offset = arglist.v.list[4].v.num;
+
+    const char *what = arglist.v.list[2].v.str;
+    if (offset < 0 || what[0] == '\0') {
+        free_var(arglist);
+        return make_error_pack(E_INVARG);
+    }
+
+    const char *source = arglist.v.list[1].v.str;
+    int source_len = memo_strlen(source);
+    int what_len = memo_strlen(what);
+
+    Var ret = new_list(0);
+    int pos = offset;
+    while (pos < source_len) {
+        int found = strindex(source + pos, source_len - pos, what, what_len, case_matters);
+        if (!found)
+            break;
+        Var v;
+        v.type = TYPE_INT;
+        v.v.num = pos + found;
+        ret = listappend(ret, v);
+        pos += (found - 1) + what_len;
+    }
+
+    free_var(arglist);
+    return make_var_pack(ret);
 }
 
 static package
@@ -1857,6 +1929,8 @@ register_list(void)
     register_function("setremove", 2, 2, bf_setremove, TYPE_LIST, TYPE_ANY);
     register_function("listremove_all", 2, 3, bf_listremove_all,
                       TYPE_LIST, TYPE_ANY, TYPE_INT);
+    register_function("listunique", 1, 2, bf_listunique,
+                      TYPE_LIST, TYPE_INT);
     register_function("listappend", 2, 3, bf_listappend,
                       TYPE_LIST, TYPE_ANY, TYPE_INT);
     register_function("listinsert", 2, 3, bf_listinsert,
@@ -1883,6 +1957,8 @@ register_list(void)
     register_function("index", 2, 4, bf_index,
                       TYPE_STR, TYPE_STR, TYPE_ANY, TYPE_INT);
     register_function("rindex", 2, 4, bf_rindex,
+                      TYPE_STR, TYPE_STR, TYPE_ANY, TYPE_INT);
+    register_function("strfindall", 2, 4, bf_strfindall,
                       TYPE_STR, TYPE_STR, TYPE_ANY, TYPE_INT);
     register_function("strcmp", 2, 2, bf_strcmp, TYPE_STR, TYPE_STR);
     register_function("strsub", 3, 4, bf_strsub,

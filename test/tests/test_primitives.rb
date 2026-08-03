@@ -143,4 +143,43 @@ class TestPrimitives < Test::Unit::TestCase
     end
   end
 
+  def test_that_toerr_converts_an_int_to_the_matching_error
+    run_test_as('programmer') do
+      assert_equal E_TYPE, simplify(command(%Q|; return toerr(1);|))
+      assert_equal E_NONE, simplify(command(%Q|; return toerr(0);|))
+    end
+  end
+
+  def test_that_toerr_converts_a_string_name_to_the_matching_error
+    run_test_as('programmer') do
+      assert_equal E_INVARG, simplify(command(%Q|; return toerr("E_INVARG");|))
+      assert_equal E_INVARG, simplify(command(%Q|; return toerr("e_invarg");|))
+    end
+  end
+
+  def test_that_toerr_passes_through_an_existing_error
+    run_test_as('programmer') do
+      assert_equal E_PERM, simplify(command(%Q|; return toerr(E_PERM);|))
+    end
+  end
+
+  def test_that_toerr_rejects_an_out_of_range_int
+    run_test_as('programmer') do
+      assert_equal E_INVARG, simplify(command(%Q|; return toerr(9999);|))
+      assert_equal E_INVARG, simplify(command(%Q|; return toerr(-1);|))
+    end
+  end
+
+  def test_that_toerr_rejects_an_unrecognized_string
+    run_test_as('programmer') do
+      assert_equal E_INVARG, simplify(command(%Q|; return toerr("not_an_error");|))
+    end
+  end
+
+  def test_that_toerr_rejects_the_wrong_type
+    run_test_as('programmer') do
+      assert_equal E_TYPE, simplify(command(%Q|; return toerr({1, 2});|))
+    end
+  end
+
 end

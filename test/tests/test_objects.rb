@@ -370,6 +370,16 @@ class TestObject < Test::Unit::TestCase
 
       assert_equal E_INVARG, chparents(f, [d, d])
       assert_equal E_INVARG, chparents(f, [e, e])
+
+      # Regression test for check_for_duplicates()'s broken loop bound: a
+      # duplicate that isn't at position 1 (e.g. positions 2 and 3 of a
+      # 3-element list) used to slip through undetected. Fresh objects with
+      # no conflicting properties, unlike d/e above, so the only thing that
+      # could raise E_INVARG here is the duplicate-parent check itself.
+      g = create(NOTHING)
+      h = create(NOTHING)
+      target = create(NOTHING)
+      assert_equal E_INVARG, chparents(target, [g, h, h])
     end
 
     # A variety of tests that check permissions.

@@ -268,6 +268,16 @@ module MooSupport
     end
   end
 
+  def strfindall(source, what, case_matters = nil, offset = nil)
+    if offset
+      simplify command %Q|; return strfindall(#{value_ref(source)}, #{value_ref(what)}, #{value_ref(case_matters)}, #{value_ref(offset)});|
+    elsif case_matters
+      simplify command %Q|; return strfindall(#{value_ref(source)}, #{value_ref(what)}, #{value_ref(case_matters)});|
+    else
+      simplify command %Q|; return strfindall(#{value_ref(source)}, #{value_ref(what)});|
+    end
+  end
+
   def encode_binary(str)
     simplify command %Q|; return encode_binary(#{value_ref(str)});|
   end

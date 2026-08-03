@@ -70,6 +70,50 @@ class TestStringOperations < Test::Unit::TestCase
     end
   end
 
+  def test_that_strfindall_finds_all_positions_of_a_substring
+    run_test_as('programmer') do
+      assert_equal [2, 4, 6], strfindall('banana', 'a')
+      assert_equal [], strfindall('banana', 'x')
+    end
+  end
+
+  def test_that_strfindall_matches_are_non_overlapping
+    run_test_as('programmer') do
+      assert_equal [1, 3], strfindall('aaaa', 'aa')
+    end
+  end
+
+  def test_that_strfindall_finds_all_positions_with_case_matters
+    run_test_as('programmer') do
+      assert_equal [], strfindall('foobar', 'O', 1)
+      assert_equal [2, 3], strfindall('foobar', 'O', 0)
+    end
+  end
+
+  # Positions are always absolute (relative to the start of `source`), even
+  # when an offset is given to start the scan partway through -- unlike
+  # index()/rindex(), whose single returned position is relative to the
+  # offset itself. Returning absolute positions is far more useful for a
+  # "find every occurrence" function, since callers naturally want to index
+  # back into the original string with the results.
+  def test_that_strfindall_positions_are_absolute_even_with_an_offset
+    run_test_as('programmer') do
+      assert_equal [4, 6], strfindall('banana', 'a', 0, 2)
+    end
+  end
+
+  def test_that_strfindall_offset_cannot_be_negative
+    run_test_as('programmer') do
+      assert_equal E_INVARG, strfindall('foobar', 'o', 0, -1)
+    end
+  end
+
+  def test_that_strfindall_rejects_an_empty_what_argument
+    run_test_as('programmer') do
+      assert_equal E_INVARG, strfindall('foobar', '')
+    end
+  end
+
   def test_that_strtr_replaces_characters
     run_test_as('programmer') do
       assert_equal 'fbboar', strtr('foobar', 'ob', 'bo')
