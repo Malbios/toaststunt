@@ -272,10 +272,16 @@ complex_var_ref(Var v)
             addref(v.v.str);
             break;
         case TYPE_LIST:
-            addref(v.v.list);
+            /* Mirrors complex_free_var()'s is_shared_empty() guard: the
+             * singleton's refcount is pinned at creation and must never be
+             * incremented either, or it would climb forever with nothing to
+             * bring it back down. */
+            if (!is_shared_empty(v))
+                addref(v.v.list);
             break;
         case TYPE_MAP:
-            addref(v.v.tree);
+            if (!is_shared_empty(v))
+                addref(v.v.tree);
             break;
         case TYPE_ITER:
             addref(v.v.trav);
@@ -302,10 +308,12 @@ complex_var_ref(Var v)
             addref(v.v.str);
             break;
         case TYPE_LIST:
-            addref(v.v.list);
+            if (!is_shared_empty(v))
+                addref(v.v.list);
             break;
         case TYPE_MAP:
-            addref(v.v.tree);
+            if (!is_shared_empty(v))
+                addref(v.v.tree);
             break;
         case TYPE_ITER:
             addref(v.v.trav);

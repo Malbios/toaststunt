@@ -190,4 +190,36 @@ class TestCollectionImprovements < Test::Unit::TestCase
     end
   end
 
+  # Regression tests mirroring the emptymap ones in test_map.rb (see the
+  # comment at the top of src/list.cc): the empty list singleton's refcount
+  # is now pinned at creation rather than growing on every copy/creation, to
+  # avoid an eventual 32-bit overflow. These can't deterministically force
+  # the exact vulnerable refcount state (the same reason the original bug
+  # was hard to find at all), but they verify a fresh `{}` is never affected
+  # by unrelated code growing, copying, or discarding another `{}`.
+
+  def test_that_growing_one_fresh_empty_list_does_not_affect_another
+    run_test_as('programmer') do
+      simplify(command(%Q|; x = {}; listappend(x, "v"); return 1;|))
+      assert_equal [], simplify(command(%Q|; return {};|))
+      assert_equal 0, simplify(command(%Q|; return length({});|))
+    end
+  end
+
+  def test_that_copying_one_fresh_empty_list_does_not_affect_another
+    run_test_as('programmer') do
+      simplify(command(%Q|; x = {}; y = x; z = x; return 1;|))
+      assert_equal [], simplify(command(%Q|; return {};|))
+      assert_equal 0, simplify(command(%Q|; return length({});|))
+    end
+  end
+
+  def test_that_discarding_a_fresh_empty_list_does_not_affect_another
+    run_test_as('programmer') do
+      simplify(command(%Q|; for i in [1..20]; x = {}; endfor; return 1;|))
+      assert_equal [], simplify(command(%Q|; return {};|))
+      assert_equal 0, simplify(command(%Q|; return length({});|))
+    end
+  end
+
 end
