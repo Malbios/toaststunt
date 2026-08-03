@@ -39,6 +39,9 @@
 - Add a `toerr(int-or-str)` function that converts an integer or an error name string (e.g. `"E_INVARG"`, case-insensitive) to the matching error value, raising E_INVARG if it doesn't match a known error.
 - Add a `strfindall(source, what [, case-matters] [, offset])` function that returns the (always absolute) positions of every non-overlapping occurrence of `what` in `source`, the string equivalent of `all_members()` for lists; previously the only native alternative was looping `pcre_match()` by hand, which isn't available on builds without PCRE2.
 - Add a `listunique(list [, case-matters])` function that returns a copy of `list` with duplicate elements removed (keeping the first occurrence of each), replacing the common `setadd()`-in-a-loop workaround, which is O(n^2) since each `setadd()` call itself rescans the result-so-far.
+- Raised the maximum number of registered built-in functions from 256 to 65535. Programs compiled under the new database version encode a builtin call's function id in 2 bytes instead of 1; programs compiled under an older database version keep using 1 byte, so existing databases (and suspended tasks within them) continue to work unchanged.
+
+**WARNING**: This version increments the database version (DBV_BiFuncId16), making databases incompatible with previous releases.
 
 ## 2.7.3 (Jun 20, 2025)
 ### Bug Fixes

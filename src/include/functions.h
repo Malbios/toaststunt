@@ -75,12 +75,17 @@ typedef package(*bf_type) (Var, Byte, void *, Objid);
 typedef void (*bf_write_type) (void *vdata);
 typedef void *(*bf_read_type) (void);
 
-#define MAX_FUNC         256
+#define MAX_FUNC         65535
 #define FUNC_NOT_FOUND   MAX_FUNC
-/* valid function numbers are 0 - 255, or a total of 256 of them.
-   function number 256 is reserved for func_not_found signal.
-   hence valid function numbers will fit in one byte but the 
-   func_not_found signal will not */
+/* valid function numbers are 0 - 65534, or a total of 65535 of them.
+   function number 65535 is reserved for func_not_found signal.
+   Builtin calls compiled under DBV_BiFuncId16 or later encode this id in
+   2 bytes; older, already-compiled bytecode (and any Program recorded at
+   an older DB_Version) still uses 1 byte and is capped at 255 -- see
+   bi_func_id_bytes()/max_encoded_bi_func_id() in functions.cc. */
+
+extern unsigned bi_func_id_bytes(DB_Version version);
+extern unsigned max_encoded_bi_func_id(DB_Version version);
 
 extern const char *name_func_by_num(unsigned);
 extern unsigned number_func_by_name(const char *);
@@ -96,8 +101,8 @@ extern int bi_function_requires_bi_variables(unsigned n);
 extern package call_bi_func(unsigned, Var, Byte, Objid, void *);
 /* will free or use Var arglist */
 
-extern void write_bi_func_data(void *vdata, Byte f_id);
-extern int read_bi_func_data(Byte f_id, void **bi_func_state,
+extern void write_bi_func_data(void *vdata, unsigned f_id);
+extern int read_bi_func_data(unsigned f_id, void **bi_func_state,
 			     Byte * bi_func_pc);
 extern Byte *pc_for_bi_func_data(void);
 

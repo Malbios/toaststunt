@@ -16,6 +16,7 @@
  *****************************************************************************/
 
 #include <stdarg.h>
+#include <vector>
 
 #include "bf_register.h"
 #include "config.h"
@@ -103,8 +104,33 @@ struct bft_entry {
     int requires_bi_variables;
 };
 
-static struct bft_entry bf_table[MAX_FUNC];
+static std::vector<struct bft_entry> bf_table;
 static unsigned top_bf_table = 0;
+
+/* Builtin-call bytecode operand width. Tied to the compiled program's own
+ * recorded DB_Version, never to the live size of bf_table or to any
+ * specific function's numeric id -- so recompiling old source (e.g. to
+ * resume a suspended task, or to reload a saved verb) always reproduces
+ * the exact same byte-for-byte bytecode layout it originally had,
+ * regardless of how many builtins have been registered since. Tying width
+ * to a builtin's own id instead (id <= 255 -> 1 byte, id > 255 -> 2 bytes)
+ * is what broke upstream's own attempt at this (toaststunt PR #69): ids
+ * shift as builtins are added/removed, so a builtin already referenced by
+ * suspended bytecode could silently cross the 256 threshold and change
+ * its own encoded length out from under an already-suspended task's
+ * recorded program counter.
+ */
+unsigned
+bi_func_id_bytes(DB_Version version)
+{
+    return version >= DBV_BiFuncId16 ? 2u : 1u;
+}
+
+unsigned
+max_encoded_bi_func_id(DB_Version version)
+{
+    return version >= DBV_BiFuncId16 ? (MAX_FUNC - 1) : 0xffu;
+}
 
 static unsigned
 register_common(const char *name, int minargs, int maxargs, bf_type func,
@@ -121,27 +147,30 @@ register_common(const char *name, int minargs, int maxargs, bf_type func,
 	errlog("too many functions.  %s cannot be registered.\n", name);
 	return 0;
     }
-    bf_table[top_bf_table].name = str_dup(name);
+
+    struct bft_entry entry;
+    entry.name = str_dup(name);
     stream_printf(s, "protect_%s", name);
-    bf_table[top_bf_table].protect_str = str_dup(reset_stream(s));
+    entry.protect_str = str_dup(reset_stream(s));
     stream_printf(s, "bf_%s", name);
-    bf_table[top_bf_table].verb_str = str_dup(reset_stream(s));
-    bf_table[top_bf_table].minargs = minargs;
-    bf_table[top_bf_table].maxargs = maxargs;
-    bf_table[top_bf_table].func = func;
-    bf_table[top_bf_table].read = read;
-    bf_table[top_bf_table].write = write;
-    bf_table[top_bf_table]._protected = 0;
-    bf_table[top_bf_table].requires_bi_variables = 0;
+    entry.verb_str = str_dup(reset_stream(s));
+    entry.minargs = minargs;
+    entry.maxargs = maxargs;
+    entry.func = func;
+    entry.read = read;
+    entry.write = write;
+    entry._protected = 0;
+    entry.requires_bi_variables = 0;
 
     if (num_arg_types > 0)
-	bf_table[top_bf_table].prototype =
+	entry.prototype =
 	    (var_type *)mymalloc(num_arg_types * sizeof(var_type), M_PROTOTYPE);
     else
-	bf_table[top_bf_table].prototype = nullptr;
+	entry.prototype = nullptr;
     for (va_index = 0; va_index < num_arg_types; va_index++)
-	bf_table[top_bf_table].prototype[va_index] = (var_type)va_arg(args, int);
+	entry.prototype[va_index] = (var_type)va_arg(args, int);
 
+    bf_table.push_back(entry);
     return top_bf_table++;
 }
 
@@ -241,7 +270,7 @@ call_bi_func(unsigned n, Var arglist, Byte func_pc,
 	free_var(arglist);
 	return no_var_pack();
     }
-    f = bf_table + n;
+    f = &bf_table[n];
 
     static Stream *error_msg = nullptr;
     if (error_msg == nullptr)
@@ -319,10 +348,10 @@ call_bi_func(unsigned n, Var arglist, Byte func_pc,
 }
 
 void
-write_bi_func_data(void *vdata, Byte f_id)
+write_bi_func_data(void *vdata, unsigned f_id)
 {
     if (f_id >= top_bf_table)
-	errlog("WRITE_BI_FUNC_DATA: Unknown function number: %d\n", f_id);
+	errlog("WRITE_BI_FUNC_DATA: Unknown function number: %u\n", f_id);
     else if (bf_table[f_id].write)
         (*(bf_table[f_id].write)) (vdata);
 }
@@ -336,12 +365,12 @@ pc_for_bi_func_data(void)
 }
 
 int
-read_bi_func_data(Byte f_id, void **bi_func_state, Byte * bi_func_pc)
+read_bi_func_data(unsigned f_id, void **bi_func_state, Byte * bi_func_pc)
 {
     pc_for_bi_func_data_being_read = bi_func_pc;
 
     if (f_id >= top_bf_table) {
-	errlog("READ_BI_FUNC_DATA: Unknown function number: %d\n", f_id);
+	errlog("READ_BI_FUNC_DATA: Unknown function number: %u\n", f_id);
 	*bi_func_state = nullptr;
 	return 0;
     } else if (bf_table[f_id].read) {

@@ -17,6 +17,7 @@
 
 #include "ast.h"
 #include "decompile.h"
+#include "functions.h"
 #include "opcode.h"
 #include "program.h"
 #include "server.h"
@@ -388,7 +389,7 @@ finish_binary:
                 e = alloc_expr(EXPR_CALL);
                 e->e.call.args = a->e.list;
                 dealloc_node(a);
-                e->e.call.func = READ_BYTES(1);
+                e->e.call.func = READ_BYTES(bi_func_id_bytes(program->version));
                 push_expr((Expr *)HOT_OP1(a, e));
             }
             break;
