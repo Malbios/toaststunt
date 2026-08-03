@@ -96,10 +96,24 @@ mymalloc(unsigned size, Memory_Type type)
     return memptr;
 }
 
+/* Bandaid mirroring the emptylist/emptymap one (see the comment at the top
+ * of list.cc): exposing this as a global lets free_str() (storage.h) skip
+ * freeing it if its refcount would otherwise hit zero. Its refcount is
+ * pinned at the value mymalloc() gives it at creation and never adjusted
+ * again in either direction -- str_dup() and str_ref() below, and
+ * complex_var_ref()'s TYPE_STR case (utils.cc), all skip the addref that
+ * would otherwise apply. Without that, the count would climb forever
+ * (nothing ever brought it back down even before this fix) and eventually
+ * overflow and wrap back through zero, reproducing the exact premature-free
+ * crash this guards against -- the same failure mode already fixed for
+ * emptylist/emptymap. */
+const char *emptystring;
+
 const char *
 str_ref(const char *s)
 {
-    addref(s);
+    if (s != emptystring)
+        addref(s);
     return s;
 }
 
@@ -109,15 +123,14 @@ str_dup(const char *s)
     char *r;
 
     if (s == nullptr || *s == '\0') {
-        static char *emptystring;
         static std::once_flag emptystring_init;
 
         std::call_once(emptystring_init, []() {
-            emptystring = (char *) mymalloc(1, M_STRING);
-            *emptystring = '\0';
+            char *ptr = (char *) mymalloc(1, M_STRING);
+            *ptr = '\0';
+            emptystring = ptr;
         });
-        addref(emptystring);
-        return emptystring;
+        return (char *) emptystring;
     } else {
         r = (char *) mymalloc(strlen(s) + 1, M_STRING); /* NO MEMO HERE */
         strcpy(r, s);
