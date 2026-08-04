@@ -84,3 +84,36 @@ Formatting follows `src/.astylerc` (Artistic Style): 4-space indentation, tabs c
 - `docs/Legacy/README/README.Stunt` and `README.LambdaMOO` — background on inherited functionality (multiple inheritance, anonymous objects, map datatype, JSON, crypto, FileIO, `exec()`, primitive-type verb calls, HTTP parsing, bitwise ops, the Ruby test framework).
 
 Everything above documents the C++ server itself. For the in-database MOO *language* (verb code, not server internals) — syntax, semantics, permissions, error handling, object lifecycle, algorithm patterns, common mistakes, and ToastStunt-vs-LambdaMOO/Stunt dialect differences — use the external corpus at https://github.com/SindomeCorp/moo-for-llms, a MIT-licensed reference built specifically to teach LLMs to read/write/repair MOOcode.
+
+## Tracking this project's work
+
+Feature/task tracking for this project lives in an Obsidian vault outside any repo, on the
+**ToastStunt Development** board -
+`C:\Users\abrae\Documents\MEGA\SmallVaults\MOOcode\boards\ToastStunt Development.md`. **Confirm
+this path fresh each session** rather than trusting this note - it has moved before.
+
+When a vault todo is implemented, built, tested, and verified, move its card straight to **Done**.
+This differs from the sibling MOO IDE project's board: that one has a **Ready for Testing** lane
+the user reviews before promoting to Done themselves; this board has no such review step for
+ToastStunt work, so completed cards go directly to Done.
+
+**A card is two lines, not one - move both.** Each entry is `- [ ] [[Card Name]]` followed by an
+indented `\t#Tag1 #Tag2` continuation line directly beneath it (tag vocabulary and colors live in
+`.obsidian/plugins/obsidian-kanban/data.json`'s `tag-colors`, in the same vault - shared across
+every board there, including this one). When relocating a card between lanes, cut/paste the
+checkbox line *and* its tag line as one unit - editing just the checkbox line and leaving the tag
+line behind silently strips the card's classification. This exact bug hit every card moved on the
+sibling MOO IDE board before 2026-08-02 (all 18 lost their tags); re-verify the tag line landed
+with the card after every move.
+
+**Tags split into two axes, colored differently in that same `tag-colors` config** - *categories*
+(subject/domain: UI/UX, VCS, Server, Security, Documentation, Diagnostics, Navigation, Editor,
+Object-Model, Language) versus *types* (nature of the work: Bugfix, Complex, Acceleration,
+Research, Safety). As of 2026-08-02:
+- Every category tag shares one identical entry - `color: rgba(0, 0, 0, 1)` (black text),
+  `backgroundColor: rgba(123, 164, 226, 1)`. **If a session introduces a new category tag, add it
+  with this exact same pair of values - don't invent a new color for it.**
+- Each type tag gets its own distinct dark `backgroundColor` with light-gray `color: rgba(225,
+  225, 225, 1)` text - currently Bugfix red, Complex amber, Acceleration purple, Research indigo,
+  Safety green. **If a session identifies a need for a new type tag, don't just pick a color for
+  it - stop and ask the user.**
