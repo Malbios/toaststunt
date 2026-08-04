@@ -131,10 +131,13 @@ enum parsing_status {
 struct http_parsing_state {
     struct http_parser parser;
     enum parsing_status status;
+    Stream *uri_stream;
+    Stream *header_field_stream;
+    Stream *header_value_stream;
+    Stream *body_stream;
+    bool header_value_started;
     Var uri;
     Var headers;
-    Var header_field_under_constr;
-    Var header_value_under_constr;
     Var body;
     Var result;
 };
@@ -348,13 +351,16 @@ static void
 init_http_parsing_state(struct http_parsing_state *state)
 {
     state->status = READY;
+    state->uri_stream = new_stream(64);
+    state->header_field_stream = new_stream(64);
+    state->header_value_stream = new_stream(64);
+    state->body_stream = new_stream(1024);
+    state->header_value_started = false;
 #define INIT_VAR(XX)        \
     {               \
         (XX).type = TYPE_NONE;  \
     }
     INIT_VAR(state->uri);
-    INIT_VAR(state->header_field_under_constr);
-    INIT_VAR(state->header_value_under_constr);
     INIT_VAR(state->headers);
     INIT_VAR(state->body);
     INIT_VAR(state->result);
@@ -365,14 +371,20 @@ static void
 reset_http_parsing_state(struct http_parsing_state *state)
 {
     state->status = READY;
+    /* Reuse the streams' already-allocated buffers across requests on the
+     * same (possibly keep-alive) connection rather than freeing/reallocating
+     * them -- true teardown only happens in free_tqueue(). */
+    reset_stream(state->uri_stream);
+    reset_stream(state->header_field_stream);
+    reset_stream(state->header_value_stream);
+    reset_stream(state->body_stream);
+    state->header_value_started = false;
 #define RESET_VAR(XX)       \
     {               \
         free_var(XX);       \
         (XX).type = TYPE_NONE;  \
     }
     RESET_VAR(state->uri);
-    RESET_VAR(state->header_field_under_constr);
-    RESET_VAR(state->header_value_under_constr);
     RESET_VAR(state->headers);
     RESET_VAR(state->body);
     RESET_VAR(state->result);
@@ -492,6 +504,10 @@ free_tqueue(tqueue * tq)
         free_vm(tq->reading_vm, 1);
     if (tq->parsing_state) {
         reset_http_parsing_state(tq->parsing_state);
+        free_stream(tq->parsing_state->uri_stream);
+        free_stream(tq->parsing_state->header_field_stream);
+        free_stream(tq->parsing_state->header_value_stream);
+        free_stream(tq->parsing_state->body_stream);
         myfree(tq->parsing_state, M_STRUCT);
     }
 
@@ -1476,32 +1492,6 @@ next_task_start(void)
     return -1;      /* never */
 }
 
-static Var
-create_or_extend(Var in, const char *_new, int newlen)
-{
-    static Stream *s = nullptr;
-    if (!s)
-        s = new_stream(100);
-
-    Var out;
-
-    if (in.type == TYPE_STR) {
-        stream_add_string(s, in.v.str);
-        stream_add_raw_bytes_to_binary(s, _new, newlen);
-        free_var(in);
-        out.type = TYPE_STR;
-        out.v.str = str_dup(reset_stream(s));
-    }
-    else {
-        stream_add_raw_bytes_to_binary(s, _new, newlen);
-        free_var(in);
-        out.type = TYPE_STR;
-        out.v.str = str_dup(reset_stream(s));
-    }
-
-    return out;
-}
-
 static int
 on_message_begin_callback(http_parser *parser)
 {
@@ -1514,7 +1504,7 @@ static int
 on_url_callback(http_parser *parser, const char *url, size_t length)
 {
     struct http_parsing_state *state = (struct http_parsing_state *)parser;
-    state->uri = create_or_extend(state->uri, url, length);
+    stream_add_raw_bytes_to_binary(state->uri_stream, url, length);
     return 0;
 }
 
@@ -1526,12 +1516,11 @@ maybe_complete_header(struct http_parsing_state *state)
         state->headers = new_map();
     }
 
-    if (state->header_value_under_constr.type == TYPE_STR) {
-        state->headers = mapinsert(state->headers,
-                                   state->header_field_under_constr,
-                                   state->header_value_under_constr);
-        state->header_field_under_constr.type = TYPE_NONE;
-        state->header_value_under_constr.type = TYPE_NONE;
+    if (state->header_value_started) {
+        Var field = str_dup_to_var(reset_stream(state->header_field_stream));
+        Var value = str_dup_to_var(reset_stream(state->header_value_stream));
+        state->headers = mapinsert(state->headers, field, value);
+        state->header_value_started = false;
     }
 }
 
@@ -1542,7 +1531,7 @@ on_header_field_callback(http_parser *parser, const char *field, size_t length)
 
     maybe_complete_header(state);
 
-    state->header_field_under_constr = create_or_extend(state->header_field_under_constr, field, length);
+    stream_add_raw_bytes_to_binary(state->header_field_stream, field, length);
 
     return 0;
 }
@@ -1552,7 +1541,8 @@ on_header_value_callback(http_parser *parser, const char *value, size_t length)
 {
     struct http_parsing_state *state = (struct http_parsing_state *)parser;
 
-    state->header_value_under_constr = create_or_extend(state->header_value_under_constr, value, length);
+    stream_add_raw_bytes_to_binary(state->header_value_stream, value, length);
+    state->header_value_started = true;
 
     return 0;
 }
@@ -1572,7 +1562,7 @@ on_body_callback(http_parser *parser, const char *body, size_t length)
 {
     struct http_parsing_state *state = (struct http_parsing_state *)parser;
 
-    state->body = create_or_extend(state->body, body, length);
+    stream_add_raw_bytes_to_binary(state->body_stream, body, length);
 
     return 0;
 }
@@ -1599,6 +1589,12 @@ on_message_complete_callback(http_parser *parser)
     }
 
     struct http_parsing_state *state = (struct http_parsing_state *)parser;
+
+    if (stream_length(state->uri_stream) > 0)
+        state->uri = str_dup_to_var(reset_stream(state->uri_stream));
+
+    if (stream_length(state->body_stream) > 0)
+        state->body = str_dup_to_var(reset_stream(state->body_stream));
 
     if (parser->type == HTTP_REQUEST) {
         Var method;

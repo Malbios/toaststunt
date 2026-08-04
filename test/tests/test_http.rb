@@ -363,6 +363,44 @@ class TestHttp < Test::Unit::TestCase
     end
   end
 
+  # Regression test for create_or_extend()'s old O(n^2) reassembly: the
+  # body/header accumulators used to re-copy the entire accumulated string
+  # on every chunk instead of appending to a growable buffer. A body large
+  # enough to arrive across many chunks (each parse() message element is
+  # fed to the parser as a separate chunk via force_input) exercises the
+  # new per-field Stream accumulators and confirms byte-for-byte fidelity.
+  def test_that_large_chunked_body_reassembles_correctly
+    run_test_as('wizard') do
+      body = (('A'..'Z').to_a + ('a'..'z').to_a + ('0'..'9').to_a).join * 1700
+      result = parse(:request) do |message|
+        message << "POST /upload HTTP/1.1~0D~0A"
+        message << "Content-Length: #{body.bytesize}~0D~0A"
+        message << "~0D~0A"
+        body.each_char.each_slice(517) { |slice| message << slice.join }
+      end
+      assert_equal 'POST', result['method']
+      assert_equal '/upload', result['uri']
+      assert_equal body, result['body']
+    end
+  end
+
+  # Same regression, for the header-field/header-value accumulators.
+  def test_that_large_chunked_header_reassembles_correctly
+    run_test_as('wizard') do
+      value = (('A'..'Z').to_a + ('a'..'z').to_a + ('0'..'9').to_a).join * 400
+      result = parse(:request) do |message|
+        message << "GET /test HTTP/1.1~0D~0A"
+        message << "X-Long: "
+        value.each_char.each_slice(211) { |slice| message << slice.join }
+        message << "~0D~0A"
+        message << "~0D~0A"
+      end
+      assert_equal 'GET', result['method']
+      assert_equal({"X-Long" => value}, result['headers'])
+      assert_equal nil, result['body']
+    end
+  end
+
   def parse(type)
     message = []
     yield message
