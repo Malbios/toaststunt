@@ -474,6 +474,7 @@ unparse_value(Stream * s, Var v)
         case TYPE_STR:
         {
             const char *str = v.v.str;
+            bool escape_ctrl = server_flag_option_cached(SVO_ESCAPE_SEQUENCES_IN_STRINGS);
 
             stream_add_char(s, '"');
             while (*str) {
@@ -481,7 +482,35 @@ unparse_value(Stream * s, Var v)
                     case '"':
                     case '\\':
                         stream_add_char(s, '\\');
-                    /* fall thru */
+                        stream_add_char(s, *str++);
+                        break;
+                    case '\n':
+                        if (escape_ctrl) {
+                            stream_add_char(s, '\\');
+                            stream_add_char(s, 'n');
+                            str++;
+                            break;
+                        }
+                        stream_add_char(s, *str++);
+                        break;
+                    case '\t':
+                        if (escape_ctrl) {
+                            stream_add_char(s, '\\');
+                            stream_add_char(s, 't');
+                            str++;
+                            break;
+                        }
+                        stream_add_char(s, *str++);
+                        break;
+                    case '\r':
+                        if (escape_ctrl) {
+                            stream_add_char(s, '\\');
+                            stream_add_char(s, 'r');
+                            str++;
+                            break;
+                        }
+                        stream_add_char(s, *str++);
+                        break;
                     default:
                         stream_add_char(s, *str++);
                 }

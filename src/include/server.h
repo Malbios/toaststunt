@@ -248,6 +248,15 @@ int proxy_connected(Objid connection, char *command);
 	              1 = complex_match() exact/starts-with/contains	\
 	              matching with ordinal disambiguation */			\
 	  )																\
+																	\
+  DEFINE( SVO_ESCAPE_SEQUENCES_IN_STRINGS, escape_sequences_in_strings,	\
+	  flag, 0, /* already canonical; 0 = legacy (bare-letter			\
+	              passthrough for \n \t \r, unparse never escapes		\
+	              control chars); 1 = \n \t \r become real control	\
+	              characters when lexing string literals, and			\
+	              unparse_value emits them back as \n \t \r			\
+	              (round-trip-safe under this mode) */				\
+	  )																\
 
 /* List of all category (2) and (3) cached server options */
 enum Server_Option {
