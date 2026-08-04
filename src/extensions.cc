@@ -169,6 +169,21 @@ bf_log_cache_stats(Var arglist, Byte next, void *vdata, Objid progr)
 
     return no_var_pack();
 }
+
+static package
+bf_command_verb_cache_stats(Var arglist, Byte next, void *vdata, Objid progr)
+{
+    Var r;
+
+    free_var(arglist);
+
+    if (!is_wizard(progr)) {
+        return make_error_pack(E_PERM);
+    }
+    r = db_command_verb_cache_stats();
+
+    return make_var_pack(r);
+}
 #endif
 
 
@@ -182,5 +197,6 @@ register_extensions()
 #ifdef STUPID_VERB_CACHE
     register_function("log_cache_stats", 0, 0, bf_log_cache_stats);
     register_function("verb_cache_stats", 0, 0, bf_verb_cache_stats);
+    register_function("command_verb_cache_stats", 0, 0, bf_command_verb_cache_stats);
 #endif
 }
