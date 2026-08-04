@@ -23,6 +23,7 @@
 ### New Features
 - Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.
 - `sqlite_execute()` now caches and reuses prepared statements per connection instead of re-preparing the same query text on every call.
+- `read_http()`'s internal HTTP body/header reassembly no longer re-copies the entire accumulated buffer on every network chunk; large bodies and header values now parse in amortized-linear rather than quadratic time.
 - Add an optional unclean_shutdown parameter to `shutdown()`, which replicates the functionality found in the `panic()` builtin.
 - Remove the `panic()` builtin.
 - Anonymous children are no longer invalidated when properties change on their parents.
