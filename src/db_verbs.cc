@@ -299,49 +299,6 @@ db_delete_verb(db_verb_handle vh)
     myfree(v, M_VERBDEF);
 }
 
-db_verb_handle
-db_find_command_verb(Objid oid, const char *verb,
-                     db_arg_spec dobj, unsigned prep, db_arg_spec iobj)
-{
-    Object *o;
-    Verbdef *v;
-    static handle h;
-    db_verb_handle vh;
-
-    Var ancestors;
-    Var ancestor;
-    int i, c;
-
-    ancestors = db_ancestors(Var::new_obj(oid), true);
-
-    FOR_EACH(ancestor, ancestors, i, c) {
-        o = dbpriv_find_object(ancestor.v.obj);
-        for (v = o->verbdefs; v; v = v->next) {
-            db_arg_spec vdobj = (db_arg_spec)((v->perms >> DOBJSHIFT) & OBJMASK);
-            db_arg_spec viobj = (db_arg_spec)((v->perms >> IOBJSHIFT) & OBJMASK);
-
-            if (verbcasecmp(v->name, verb)
-                    && (vdobj == ASPEC_ANY || vdobj == dobj)
-                    && (v->prep == PREP_ANY || v->prep == prep)
-                    && (viobj == ASPEC_ANY || viobj == iobj)) {
-                h.definer = o;
-                h.verbdef = v;
-                vh.ptr = &h;
-
-                free_var(ancestors);
-
-                return vh;
-            }
-        }
-    }
-
-    free_var(ancestors);
-
-    vh.ptr = nullptr;
-
-    return vh;
-}
-
 #ifdef VERB_CACHE
 int db_verb_generation = 0;
 
@@ -468,7 +425,234 @@ db_log_cache_stats(void)
     oklog("---\n");
 }
 
-#endif
+/*
+ * `db_find_command_verb' is used for ordinary player command dispatch
+ * (as opposed to `db_find_callable_verb', used for `this:verb()' calls).
+ * Unlike callable-verb dispatch, the same object may legally define
+ * several verbs sharing a name but distinguished only by dobj/prep/iobj
+ * arg-spec (e.g. bare `look' vs. `look at * with *'), so the cache here
+ * is keyed on the full (ancestor, verb name, dobj, prep, iobj) tuple
+ * rather than just (object, name) -- a cache keyed only on the latter
+ * would silently return whichever verbdef happened to be cached first,
+ * regardless of the arg-spec the command parser actually resolved.
+ *
+ * Invalidation piggybacks on the callable-verb cache's own
+ * `db_verb_generation' counter rather than adding new flush call sites:
+ * every entry is stamped with the generation at insert time, and a
+ * generation mismatch on lookup is treated as an implicit miss. This
+ * also means invalidation itself stays O(1) (no full-table walk) --
+ * stale entries are simply overwritten in place the next time their
+ * bucket is looked up for the same key.
+ */
+
+int cvccache_hit = 0;
+int cvccache_neg_hit = 0;
+int cvccache_miss = 0;
+
+typedef struct cvc_entry cvc_entry;
+
+struct cvc_entry {
+    unsigned int hash;
+    Object *object;
+    char *verbname;
+    db_arg_spec dobj;
+    short prep;
+    db_arg_spec iobj;
+    unsigned int generation;
+    handle h;
+    struct cvc_entry *next;
+};
+
+static cvc_entry **cvc_table = nullptr;
+static int cvc_size = 0;
+
+#define DEFAULT_CVC_SIZE 7507
+
+static void
+make_cvc_table(int size)
+{
+    int i;
+
+    cvc_size = size;
+    cvc_table = (cvc_entry **)mymalloc(size * sizeof(cvc_entry *), M_VC_TABLE);
+    for (i = 0; i < size; i++) {
+        cvc_table[i] = nullptr;
+    }
+}
+
+Var
+db_command_verb_cache_stats(void)
+{
+    int i, depth, histogram[VC_CACHE_STATS_MAX + 1];
+    cvc_entry *vc;
+    Var v, vv;
+
+    for (i = 0; i < VC_CACHE_STATS_MAX + 1; i++) {
+        histogram[i] = 0;
+    }
+
+    for (i = 0; i < cvc_size; i++) {
+        depth = 0;
+        for (vc = cvc_table[i]; vc; vc = vc->next)
+            depth++;
+        if (depth > VC_CACHE_STATS_MAX)
+            depth = VC_CACHE_STATS_MAX;
+        histogram[depth]++;
+    }
+
+    v = new_list(5);
+    v.v.list[1].type = TYPE_INT;
+    v.v.list[1].v.num = cvccache_hit;
+    v.v.list[2].type = TYPE_INT;
+    v.v.list[2].v.num = cvccache_neg_hit;
+    v.v.list[3].type = TYPE_INT;
+    v.v.list[3].v.num = cvccache_miss;
+    v.v.list[4].type = TYPE_INT;
+    v.v.list[4].v.num = db_verb_generation;
+    vv = (v.v.list[5] = new_list(VC_CACHE_STATS_MAX + 1));
+    for (i = 0; i < VC_CACHE_STATS_MAX + 1; i++) {
+        vv.v.list[i + 1].type = TYPE_INT;
+        vv.v.list[i + 1].v.num = histogram[i];
+    }
+    return v;
+}
+
+db_verb_handle
+db_find_command_verb(Objid oid, const char *verb,
+                     db_arg_spec dobj, unsigned prep, db_arg_spec iobj)
+{
+    Object *o;
+    Verbdef *v;
+    db_verb_handle vh;
+
+    Var ancestors;
+    Var ancestor;
+    int i, c;
+
+    ancestors = db_ancestors(Var::new_obj(oid), true);
+
+    FOR_EACH(ancestor, ancestors, i, c) {
+        o = dbpriv_find_object(ancestor.v.obj);
+        if (o->verbdefs == nullptr)
+            continue;
+
+        if (cvc_table == nullptr)
+            make_cvc_table(DEFAULT_CVC_SIZE);
+
+        unsigned int chash = str_hash(verb) ^ (~(unsigned long)o)
+                              ^ (((unsigned)prep + 2) << 4)
+                              ^ ((unsigned)dobj << 2)
+                              ^ (unsigned)iobj;
+        unsigned int cbucket = chash % cvc_size;
+        cvc_entry *vc;
+
+        for (vc = cvc_table[cbucket]; vc; vc = vc->next) {
+            if (vc->hash == chash && vc->object == o
+                    && vc->dobj == dobj && vc->prep == (short)prep && vc->iobj == iobj
+                    && !strcasecmp(verb, vc->verbname))
+                break;
+        }
+
+        if (vc && vc->generation == (unsigned int)db_verb_generation) {
+            if (vc->h.verbdef) {
+                cvccache_hit++;
+                vh.ptr = &vc->h;
+                free_var(ancestors);
+                return vh;
+            } else {
+                cvccache_neg_hit++;
+                continue;   /* negative hit for this ancestor: keep looking further up */
+            }
+        }
+
+        cvccache_miss++;
+
+        for (v = o->verbdefs; v; v = v->next) {
+            db_arg_spec vdobj = (db_arg_spec)((v->perms >> DOBJSHIFT) & OBJMASK);
+            db_arg_spec viobj = (db_arg_spec)((v->perms >> IOBJSHIFT) & OBJMASK);
+
+            if (verbcasecmp(v->name, verb)
+                    && (vdobj == ASPEC_ANY || vdobj == dobj)
+                    && (v->prep == PREP_ANY || v->prep == prep)
+                    && (viobj == ASPEC_ANY || viobj == iobj))
+                break;
+        }
+
+        if (!vc) {
+            vc = (cvc_entry *)mymalloc(sizeof(cvc_entry), M_VC_ENTRY);
+            vc->hash = chash;
+            vc->object = o;
+            vc->verbname = str_dup(verb);
+            vc->dobj = dobj;
+            vc->prep = (short)prep;
+            vc->iobj = iobj;
+            vc->next = cvc_table[cbucket];
+            cvc_table[cbucket] = vc;
+        }
+        vc->generation = (unsigned int)db_verb_generation;
+        vc->h.definer = o;
+        vc->h.verbdef = v;
+
+        if (v) {
+            free_var(ancestors);
+            vh.ptr = &vc->h;
+            return vh;
+        }
+    }
+
+    free_var(ancestors);
+
+    vh.ptr = nullptr;
+
+    return vh;
+}
+
+#else /* !VERB_CACHE */
+
+db_verb_handle
+db_find_command_verb(Objid oid, const char *verb,
+                     db_arg_spec dobj, unsigned prep, db_arg_spec iobj)
+{
+    Object *o;
+    Verbdef *v;
+    static handle h;
+    db_verb_handle vh;
+
+    Var ancestors;
+    Var ancestor;
+    int i, c;
+
+    ancestors = db_ancestors(Var::new_obj(oid), true);
+
+    FOR_EACH(ancestor, ancestors, i, c) {
+        o = dbpriv_find_object(ancestor.v.obj);
+        for (v = o->verbdefs; v; v = v->next) {
+            db_arg_spec vdobj = (db_arg_spec)((v->perms >> DOBJSHIFT) & OBJMASK);
+            db_arg_spec viobj = (db_arg_spec)((v->perms >> IOBJSHIFT) & OBJMASK);
+
+            if (verbcasecmp(v->name, verb)
+                    && (vdobj == ASPEC_ANY || vdobj == dobj)
+                    && (v->prep == PREP_ANY || v->prep == prep)
+                    && (viobj == ASPEC_ANY || viobj == iobj)) {
+                h.definer = o;
+                h.verbdef = v;
+                vh.ptr = &h;
+
+                free_var(ancestors);
+
+                return vh;
+            }
+        }
+    }
+
+    free_var(ancestors);
+
+    vh.ptr = nullptr;
+
+    return vh;
+}
+
+#endif /* VERB_CACHE */
 
 /*
  * Used by `db_find_callable_verb' once a suitable starting point

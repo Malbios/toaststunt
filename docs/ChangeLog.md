@@ -20,6 +20,7 @@
 ### New Features
 - Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.
 - `sqlite_execute()` now caches and reuses prepared statements per connection instead of re-preparing the same query text on every call.
+- Player command dispatch (`db_find_command_verb()`, used for ordinary typed commands) is now cached, mirroring the existing `db_find_callable_verb()` cache instead of doing a full linear ancestor/verbdef scan on every command. A new wizard-only `command_verb_cache_stats()` builtin reports its hit/miss counters, alongside the existing `verb_cache_stats()`.
 - Add an optional unclean_shutdown parameter to `shutdown()`, which replicates the functionality found in the `panic()` builtin.
 - Remove the `panic()` builtin.
 - Anonymous children are no longer invalidated when properties change on their parents.
