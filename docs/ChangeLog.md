@@ -20,6 +20,7 @@
 ### New Features
 - Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.
 - `sqlite_execute()` now caches and reuses prepared statements per connection instead of re-preparing the same query text on every call.
+- Added an opt-in `escape_sequences_in_strings` server option (`$server_options.escape_sequences_in_strings`, default off) that makes `\n`, `\t`, and `\r` in string literals produce real control characters instead of silently dropping the backslash; when enabled, `unparse_value()`/`toliteral()`/`verb_code()` also emit matching `\n`/`\t`/`\r` escapes so output remains recompilable, which additionally fixes a pre-existing bug where a string containing a raw control character (e.g. via `chr(10)`) could not be losslessly round-tripped through `toliteral()`.
 - Add an optional unclean_shutdown parameter to `shutdown()`, which replicates the functionality found in the `panic()` builtin.
 - Remove the `panic()` builtin.
 - Anonymous children are no longer invalidated when properties change on their parents.

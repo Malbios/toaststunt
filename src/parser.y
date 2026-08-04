@@ -36,6 +36,7 @@
 #include "opcode.h"
 #include "parser.h"
 #include "program.h"
+#include "server.h"
 #include "storage.h"
 #include "streams.h"
 #include "structures.h"
@@ -1126,8 +1127,24 @@ start_over:
 	    c = lex_getc();
 	    if (c == '"')
 		break;
-	    if (c == '\\')
+	    if (c == '\\') {
 		c = lex_getc();
+		if (c == '\n' || c == EOF) {
+		    yyerror("Missing quote");
+		    break;
+		}
+		if (server_flag_option_cached(SVO_ESCAPE_SEQUENCES_IN_STRINGS)) {
+		    switch (c) {
+			case 'n': c = '\n'; break;
+			case 't': c = '\t'; break;
+			case 'r': c = '\r'; break;
+			default: break;  /* \" \\ and anything else: keep
+					    the literal char, same as always */
+		    }
+		}
+		stream_add_char(token_stream, c);
+		continue;
+	    }
 	    if (c == '\n' || c == EOF) {
 		yyerror("Missing quote");
 		break;
