@@ -17,6 +17,9 @@
 - Corrected `simplex_noise()`'s 2D scale factor from a self-admitted preliminary `40.0` to `70.0`, matching Stefan Gustavson's own later corrected reference implementation; 1D/3D/4D were already using their correct, non-placeholder constants.
 - `chparent()`/`chparents()`/`create()`/`recreate()` now correctly reject a duplicate parent anywhere in a multi-parent list. The duplicate check's inner loop bound was off (`j = i + i` instead of `j = i + 1`), so it only reliably caught a duplicate at position 1; a duplicate located entirely at position 2 or later (e.g. `{a, b, b}`) silently passed instead of raising E_INVARG.
 
+### Testing
+- Added regression coverage for the telnet IAC state machine correctly reassembling commands whose bytes arrive split across separate network reads: escaped `IAC IAC`, a `WILL`/`WONT`/`DO`/`DONT` command split byte-by-byte, a subnegotiation payload split mid-stream and exactly at its terminating `IAC SE`, and an `IAC` command interleaved with in-band data in a single read.
+
 ### New Features
 - Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.
 - `sqlite_execute()` now caches and reuses prepared statements per connection instead of re-preparing the same query text on every call.
