@@ -19,6 +19,7 @@
 
 ### Testing
 - Added regression coverage for the telnet IAC state machine correctly reassembling commands whose bytes arrive split across separate network reads: escaped `IAC IAC`, a `WILL`/`WONT`/`DO`/`DONT` command split byte-by-byte, a subnegotiation payload split mid-stream and exactly at its terminating `IAC SE`, and an `IAC` command interleaved with in-band data in a single read.
+- Added regression coverage for two previously-untested lifecycle edge cases surfaced while investigating the emptylist bandaid bug: heavy waif propdef churn (`chparent`/`add_property`/`delete_property`) interleaved with many forked tasks concurrently reading/writing `{}`-valued waif properties, and `kill_task()` racing a suspended or forked-then-suspended task holding `{}`-valued locals.
 
 ### New Features
 - Replaced the linear connection-handle scan behind `notify()` and other player-lookup call sites with an O(1) index, improving performance on servers with many connections.
