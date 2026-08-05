@@ -75,10 +75,23 @@ new_list(int size)
             emptylist.v.list = ptr;
             emptylist.v.list[0].type = TYPE_INT;
             emptylist.v.list[0].v.num = 0;
+
+#ifdef TRACE_REFCOUNT
+            g_refcount_trace_target = emptylist.v.list;
+            trace_refcount_event(emptylist.v.list, "BIRTH", refcount(emptylist.v.list));
+#endif
         });
 
 #ifdef ENABLE_GC
         assert(gc_get_color(emptylist.v.list) == GC_GREEN);
+#endif
+
+#ifdef FAIL_LOUD_ON_EMPTYLIST_FREE
+        /* Investigation-only (see options.h): with the tripwire enabled,
+         * track real logical references instead of pinning at 1 -- every
+         * call here mints one, mirroring how a real (non-shared) new_list()
+         * caller owns one reference to what it gets back. */
+        addref(emptylist.v.list);
 #endif
 
         return emptylist;
@@ -2005,6 +2018,22 @@ bf_strlower(Var arglist, Byte next, void *vdata, Objid progr)
     return make_var_pack(r);
 }
 
+#ifdef TRACE_REFCOUNT
+static package
+bf_debug_emptylist_refcount(Var arglist, Byte next, void *vdata, Objid progr)
+{   /* investigation-only, see options.h */
+    free_var(arglist);
+
+    if (!is_wizard(progr))
+        return make_error_pack(E_PERM);
+
+    Var r;
+    r.type = TYPE_INT;
+    r.v.num = refcount(emptylist.v.list);
+    return make_var_pack(r);
+}
+#endif
+
 void
 register_list(void)
 {
@@ -2064,4 +2093,8 @@ register_list(void)
     register_function("strtrimr", 1, 2, bf_strtrimr, TYPE_STR, TYPE_STR);
     register_function("strupper", 1, 1, bf_strupper, TYPE_STR);
     register_function("strlower", 1, 1, bf_strlower, TYPE_STR);
+
+#ifdef TRACE_REFCOUNT
+    register_function("debug_emptylist_refcount", 0, 0, bf_debug_emptylist_refcount);
+#endif
 }

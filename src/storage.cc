@@ -27,6 +27,61 @@
 #include "structures.h"
 #include "utils.h"
 
+#ifdef TRACE_REFCOUNT
+#include <cstdio>
+#include <execinfo.h>
+#include <pthread.h>
+
+#ifndef TRACE_REFCOUNT_MAX_EVENTS
+#define TRACE_REFCOUNT_MAX_EVENTS 200000
+#endif
+
+/* Investigation-only (see options.h): backtrace-logging tracer for every
+ * refcount change to the emptylist/emptymap singleton payloads. Targets are
+ * set once by new_list()/new_map() right after each singleton is created. */
+const void *g_refcount_trace_target = nullptr;
+const void *g_refcount_trace_target2 = nullptr;
+
+void
+trace_refcount_event(const void *ptr, const char *op, uint32_t new_value)
+{
+    static std::atomic<unsigned long> event_count{0};
+    static std::once_flag log_init;
+    static FILE *log_file = nullptr;
+    static std::mutex log_mutex;
+
+    void *frames[32];
+    int n_frames = backtrace(frames, 32);
+
+    std::call_once(log_init, []() {
+        log_file = fopen("refcount_trace.log", "w");
+        if (log_file)
+            setvbuf(log_file, nullptr, _IOLBF, 0);
+    });
+
+    if (!log_file)
+        return;
+
+    unsigned long seq = event_count.fetch_add(1);
+    if (seq > TRACE_REFCOUNT_MAX_EVENTS)
+        return;
+
+    std::lock_guard<std::mutex> lock(log_mutex);
+
+    if (seq == TRACE_REFCOUNT_MAX_EVENTS) {
+        fprintf(log_file, "CAPPED at %d events, no further refcount events will be logged\n",
+                TRACE_REFCOUNT_MAX_EVENTS);
+        return;
+    }
+
+    fprintf(log_file, "%lu thread=%lu ptr=%p op=%s refcount=%u", seq,
+            (unsigned long) pthread_self(), ptr, op, new_value);
+    for (int i = 0; i < n_frames; i++)
+        fprintf(log_file, " %p", frames[i]);
+    fprintf(log_file, "\n");
+}
+#endif /* TRACE_REFCOUNT */
+
 static inline int
 refcount_overhead(Memory_Type type)
 {

@@ -614,10 +614,25 @@ new_map(void)
 
     std::call_once(map_init, []() {
         emptymap = empty_map();
+
+#ifdef TRACE_REFCOUNT
+        /* Negative control: same unconditional-addref/no-real-decref shape
+         * as emptylist, but with no known crash history -- tracing it helps
+         * narrow whether a future finding is list-specific or a general
+         * shared-singleton problem. */
+        g_refcount_trace_target2 = emptymap.v.tree;
+        trace_refcount_event(emptymap.v.tree, "BIRTH", refcount(emptymap.v.tree));
+#endif
     });
 
 #ifdef ENABLE_GC
     assert(gc_get_color(emptymap.v.tree) == GC_GREEN);
+#endif
+
+#ifdef FAIL_LOUD_ON_EMPTYLIST_FREE
+    /* Investigation-only (see options.h): mirrors new_list()'s real
+     * addref under the tripwire macro. */
+    addref(emptymap.v.tree);
 #endif
 
     return emptymap;

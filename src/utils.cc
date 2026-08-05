@@ -142,6 +142,41 @@ aux_free(Var v)
     }
 }
 
+/* Investigation-only (see options.h). Called from every place
+ * complex_free_var() takes the emptylist/emptymap bandaid branch instead of
+ * a real delref(). On master the real refcount is intentionally pinned
+ * forever at 1 (new_list()/new_map()/complex_var_ref() all skip the addref
+ * that would otherwise apply, mirroring this skipped delref) -- so a bare
+ * "do the real delref and see if it hits zero" is meaningless on its own,
+ * since the very first free after startup would always hit zero regardless
+ * of whether a real bug exists. FAIL_LOUD_ON_EMPTYLIST_FREE therefore also
+ * un-pins the increment side (see the sibling additions in new_list(),
+ * new_map(), and complex_var_ref()): with both sides tracking real
+ * logical references again (as they did before the overflow-wrap fix),
+ * this delref is a genuine decrement, and hitting zero while any reference
+ * is still logically outstanding elsewhere is exactly the premature-free
+ * condition this whole bandaid exists to hide. Deliberately does NOT
+ * re-pin the count back up afterward -- a short investigation run won't
+ * approach the 32-bit overflow the original pin was guarding against, and
+ * re-pinning would erase the very signal being looked for. With
+ * TRACE_REFCOUNT defined, also logs a SKIPPED-DEL event for the trace log.
+ * A no-op (and thus zero-cost) call when both macros are undefined, i.e.
+ * in any normal build.
+ */
+static inline void
+diagnose_shared_empty_free(const void *ptr)
+{
+    (void) ptr;
+#ifdef FAIL_LOUD_ON_EMPTYLIST_FREE
+    uint32_t rc = delref(ptr);
+    assert(rc > 0 && "emptylist/emptymap refcount reached zero -- a reference was freed with none logically outstanding");
+#endif
+#ifdef TRACE_REFCOUNT
+    if (ptr == g_refcount_trace_target || ptr == g_refcount_trace_target2)
+        trace_refcount_event(ptr, "SKIPPED-DEL", refcount(ptr));
+#endif
+}
+
 #ifdef ENABLE_GC
 /* Corresponds to `Decrement' and `Release' in Bacon and Rajan. */
 void
@@ -153,7 +188,11 @@ complex_free_var(Var v)
                 free_str(v.v.str);
             break;
         case TYPE_LIST:
-            if (!is_shared_empty(v) && delref(v.v.list) == 0) {
+            if (is_shared_empty(v)) {
+                diagnose_shared_empty_free(v.v.list);
+                gc_possible_root(v);
+            }
+            else if (delref(v.v.list) == 0) {
                 destroy_list(v);
                 gc_set_color(v.v.list, GC_BLACK);
                 if (!gc_is_buffered(v.v.list))
@@ -163,7 +202,11 @@ complex_free_var(Var v)
                 gc_possible_root(v);
             break;
         case TYPE_MAP:
-            if (!is_shared_empty(v) && delref(v.v.tree) == 0) {
+            if (is_shared_empty(v)) {
+                diagnose_shared_empty_free(v.v.tree);
+                gc_possible_root(v);
+            }
+            else if (delref(v.v.tree) == 0) {
                 destroy_map(v);
                 gc_set_color(v.v.tree, GC_BLACK);
                 if (!gc_is_buffered(v.v.tree))
@@ -225,11 +268,15 @@ complex_free_var(Var v)
                 free_str(v.v.str);
             break;
         case TYPE_LIST:
-            if (!is_shared_empty(v) && delref(v.v.list) == 0)
+            if (is_shared_empty(v))
+                diagnose_shared_empty_free(v.v.list);
+            else if (delref(v.v.list) == 0)
                 destroy_list(v);
             break;
         case TYPE_MAP:
-            if (!is_shared_empty(v) && delref(v.v.tree) == 0)
+            if (is_shared_empty(v))
+                diagnose_shared_empty_free(v.v.tree);
+            else if (delref(v.v.tree) == 0)
                 destroy_map(v);
             break;
         case TYPE_ITER:
@@ -282,10 +329,18 @@ complex_var_ref(Var v)
              * bring it back down. */
             if (!is_shared_empty(v))
                 addref(v.v.list);
+#ifdef FAIL_LOUD_ON_EMPTYLIST_FREE
+            else
+                addref(v.v.list); /* investigation-only: track real refs, see options.h */
+#endif
             break;
         case TYPE_MAP:
             if (!is_shared_empty(v))
                 addref(v.v.tree);
+#ifdef FAIL_LOUD_ON_EMPTYLIST_FREE
+            else
+                addref(v.v.tree);
+#endif
             break;
         case TYPE_ITER:
             addref(v.v.trav);
@@ -318,10 +373,18 @@ complex_var_ref(Var v)
         case TYPE_LIST:
             if (!is_shared_empty(v))
                 addref(v.v.list);
+#ifdef FAIL_LOUD_ON_EMPTYLIST_FREE
+            else
+                addref(v.v.list); /* investigation-only: track real refs, see options.h */
+#endif
             break;
         case TYPE_MAP:
             if (!is_shared_empty(v))
                 addref(v.v.tree);
+#ifdef FAIL_LOUD_ON_EMPTYLIST_FREE
+            else
+                addref(v.v.tree);
+#endif
             break;
         case TYPE_ITER:
             addref(v.v.trav);

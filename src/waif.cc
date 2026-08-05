@@ -36,6 +36,7 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
+#include <cassert>
 
 static unsigned long waif_count = 0;
 static std::unordered_map<Objid, unsigned int> waif_class_count;
@@ -478,6 +479,25 @@ update_waif_propdefs(Waif *waif)
     int i, cnt;
     static Var *xfer;
     static int xfer_sz;
+
+#ifdef WAIF_XFER_REENTRANCY_CHECK
+    /* Investigation-only (see options.h): xfer/xfer_sz above are a shared
+     * static scratch buffer, correct only if this function is never
+     * reentered while a fill/copy-back cycle is in flight. write_waif()
+     * (below) has an explicit comment acknowledging waif processing can
+     * recurse and defends against it with a table; this function has no
+     * equivalent guard -- a candidate root cause for the emptylist refcount
+     * bug, since {} is a very common waif-property default/clear value. */
+    static bool xfer_in_use = false;
+    struct reentrancy_guard {
+        reentrancy_guard()
+        {
+            assert(!xfer_in_use && "update_waif_propdefs() reentered while its xfer buffer is in use");
+            xfer_in_use = true;
+        }
+        ~reentrancy_guard() { xfer_in_use = false; }
+    } xfer_reentrancy_guard;
+#endif
 
     /* If the class has been destroyed we're invalid!  Destroy the
      * properties and release our reference to the old propvals.

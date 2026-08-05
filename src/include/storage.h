@@ -50,18 +50,34 @@ typedef struct var_metadata {
 #endif
 } var_metadata;
 
+#ifdef TRACE_REFCOUNT
+extern const void *g_refcount_trace_target;
+extern const void *g_refcount_trace_target2;
+extern void trace_refcount_event(const void *ptr, const char *op, uint32_t new_value);
+#endif
+
 static inline uint32_t
 addref(const void *ptr)
 {
     var_metadata *metadata = ((var_metadata*)ptr) - 1;
-    return ++(metadata->refcount);
+    uint32_t rc = ++(metadata->refcount);
+#ifdef TRACE_REFCOUNT
+    if (ptr == g_refcount_trace_target || ptr == g_refcount_trace_target2)
+        trace_refcount_event(ptr, "ADD", rc);
+#endif
+    return rc;
 }
 
 static inline uint32_t
 delref(const void *ptr)
 {
     var_metadata *metadata = ((var_metadata*)ptr) - 1;
-    return --(metadata->refcount);
+    uint32_t rc = --(metadata->refcount);
+#ifdef TRACE_REFCOUNT
+    if (ptr == g_refcount_trace_target || ptr == g_refcount_trace_target2)
+        trace_refcount_event(ptr, "DEL", rc);
+#endif
+    return rc;
 }
 
 static inline uint32_t

@@ -61,6 +61,38 @@
 /* #define LOG_GC_STATS */
 
 /******************************************************************************
+ * Investigation-only instrumentation for the "emptylist bandaid" refcounting
+ * bug (see docs/ tracking notes). All three are off by default and must stay
+ * that way for any production build -- they add tracking/assertion overhead
+ * and, in the case of FAIL_LOUD_ON_EMPTYLIST_FREE, deliberately abort the
+ * server the instant they catch what they're looking for.
+ *
+ * TRACE_REFCOUNT logs every refcount change to the shared emptylist/emptymap
+ * singleton payloads (with a captured backtrace) to refcount_trace.log, and
+ * enables the wizard-only debug_emptylist_refcount() builtin.
+ *
+ * FAIL_LOUD_ON_EMPTYLIST_FREE turns complex_free_var()'s permanent
+ * emptylist/emptymap bandaid (src/utils.cc) into an active tripwire. The
+ * real refcount is normally pinned forever at 1 (both the addref and delref
+ * that would otherwise apply are skipped) -- this macro un-pins BOTH sides
+ * (see new_list(), new_map(), complex_var_ref(), complex_free_var()), so
+ * the count once again tracks real logical references as it did before the
+ * overflow-wrap fix, and asserts the instant a delref would reach zero
+ * while a reference is still logically outstanding elsewhere -- the exact
+ * premature-free condition the bandaid exists to hide. Only meaningful
+ * combined with a short, bounded investigation run: over a very long soak
+ * this reintroduces the (already-fixed-on-master) 32-bit overflow risk.
+ *
+ * WAIF_XFER_REENTRANCY_CHECK asserts if update_waif_propdefs() (src/waif.cc)
+ * is ever reentered while its shared static scratch buffer is in use.
+ */
+
+/* #define TRACE_REFCOUNT */
+/* #define TRACE_REFCOUNT_MAX_EVENTS 200000 */
+/* #define FAIL_LOUD_ON_EMPTYLIST_FREE */
+/* #define WAIF_XFER_REENTRANCY_CHECK */
+
+/******************************************************************************
  * The server normally forks a separate process to make database checkpoints;
  * the original process continues to service user commands as usual while the
  * new process writes out the contents of its copy of memory to a disk file.
